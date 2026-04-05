@@ -1,14 +1,22 @@
 {
 	"name": "@levi-tc/ruah",
 	"version": "0.1.0",
-	"description": "Multi-agent orchestration. Workspace isolation, DAG scheduling, merge coordination. crag-aware.",
+	"description": "Multi-agent orchestration. Workspace isolation, DAG scheduling, file locking, subagent spawning, merge coordination. crag-aware.",
 	"type": "module",
 	"bin": {
 		"ruah": "./src/cli.js"
 	},
+	"files": [
+		"src/",
+		"LICENSE",
+		"README.md"
+	],
 	"scripts": {
 		"start": "node src/cli.js",
-		"test": "node --test test/*.test.js"
+		"test": "node --test test/*.test.js",
+		"lint": "npx @biomejs/biome check .",
+		"format": "npx @biomejs/biome check --write .",
+		"prepublishOnly": "node --test test/*.test.js"
 	},
 	"keywords": [
 		"ai",
@@ -16,11 +24,23 @@
 		"orchestration",
 		"multi-agent",
 		"claude-code",
+		"codex",
+		"aider",
 		"worktree",
 		"workflow",
+		"subagent",
 		"crag"
 	],
+	"author": "levi-tc",
 	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/levi-tc/ruah.git"
+	},
+	"bugs": {
+		"url": "https://github.com/levi-tc/ruah/issues"
+	},
+	"homepage": "https://github.com/levi-tc/ruah#readme",
 	"engines": {
 		"node": ">=18.0.0"
 	}
