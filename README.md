@@ -16,6 +16,9 @@ npm install -g @levi-tc/ruah
 # Initialize in any git repo
 ruah init
 
+# Register with AI agents (Claude Code, Cursor, Windsurf, etc.)
+ruah setup
+
 # Create isolated tasks with file locks
 ruah task create auth --files "src/auth/**" --executor claude-code --prompt "Implement authentication"
 ruah task create api --files "src/api/**" --executor aider --prompt "Build REST API"
@@ -24,7 +27,7 @@ ruah task create api --files "src/api/**" --executor aider --prompt "Build REST 
 ruah task start auth
 ruah task start api
 
-# When done, merge back (runs crag gates if available)
+# When done, merge back (runs governance gates if available)
 ruah task done auth
 ruah task merge auth
 
@@ -223,7 +226,7 @@ npm version patch   # or minor, major
 git push --tags
 ```
 
-This triggers the release pipeline which runs lint + tests, publishes to npm, and creates a GitHub release with auto-generated notes.
+This triggers the release pipeline which runs typecheck + lint + tests, publishes to npm, and creates a GitHub release with auto-generated notes.
 
 > **First-time setup:** Add your npm token as `NPM_TOKEN` in GitHub repo settings → Secrets and variables → Actions.
 
@@ -239,7 +242,12 @@ arhy   = system contracts                               (@levi-tc/arhy)
 
 - Node.js 18+
 - Git (for worktrees)
-- Zero npm dependencies
+- TypeScript (dev only — ships compiled JS)
+- Zero runtime npm dependencies
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## License
 
