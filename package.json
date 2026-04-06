@@ -1,6 +1,6 @@
 {
 	"name": "@levi-tc/ruah",
-	"version": "0.3.3",
+	"version": "0.3.4",
 	"description": "Multi-agent orchestration. Workspace isolation, DAG scheduling, file locking, subagent spawning, merge coordination. crag-aware.",
 	"type": "module",
 	"bin": {

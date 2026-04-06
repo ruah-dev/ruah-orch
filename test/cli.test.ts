@@ -22,7 +22,7 @@ function ruah(args: string, cwd: string): string {
 			cwd,
 			encoding: "utf-8",
 			stdio: "pipe",
-			env: { ...process.env, NO_COLOR: "1" },
+			env: { ...process.env, NO_COLOR: "1", RUAH_NO_UPDATE_CHECK: "1" },
 		});
 	} catch (err: unknown) {
 		const e = err as { stdout?: string; stderr?: string };
@@ -83,7 +83,7 @@ describe("CLI integration", () => {
 
 	it("--version prints version", () => {
 		const out = ruah("--version", repo);
-		assert.ok(out.includes("ruah 0.3.3"));
+		assert.ok(out.includes("ruah 0.3.4"));
 	});
 
 	it("init creates .ruah directory structure", () => {
