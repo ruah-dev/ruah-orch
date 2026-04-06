@@ -209,3 +209,108 @@ describe("getExecutionPlan", () => {
 		assert.equal(plan[2].length, 1); // d
 	});
 });
+
+describe("on_conflict parsing", () => {
+	let dir: string;
+
+	beforeEach(() => {
+		dir = tmpDir();
+	});
+	afterEach(() => {
+		rmSync(dir, { recursive: true, force: true });
+	});
+
+	it("parses on_conflict from config section", () => {
+		const path = writeWorkflow(
+			dir,
+			`# Workflow: conflict-test
+
+## Config
+- base: main
+- on_conflict: rebase
+
+## Tasks
+
+### task1
+- files: src/**
+- executor: claude-code
+- depends: []
+- prompt: Do work
+`,
+		);
+
+		const wf = parseWorkflow(path);
+		assert.equal(wf.config.onConflict, "rebase");
+	});
+
+	it("parses on_conflict from task section", () => {
+		const path = writeWorkflow(
+			dir,
+			`# Workflow: conflict-test
+
+## Config
+- base: main
+
+## Tasks
+
+### task1
+- files: src/**
+- executor: claude-code
+- depends: []
+- on_conflict: retry
+- prompt: Do work
+`,
+		);
+
+		const wf = parseWorkflow(path);
+		assert.equal(wf.tasks[0].onConflict, "retry");
+	});
+
+	it("defaults to fail when not specified", () => {
+		const path = writeWorkflow(
+			dir,
+			`# Workflow: default-test
+
+## Config
+- base: main
+
+## Tasks
+
+### task1
+- files: src/**
+- executor: claude-code
+- depends: []
+- prompt: Do work
+`,
+		);
+
+		const wf = parseWorkflow(path);
+		assert.equal(wf.config.onConflict, "fail");
+		assert.equal(wf.tasks[0].onConflict, "fail");
+	});
+
+	it("ignores invalid on_conflict values", () => {
+		const path = writeWorkflow(
+			dir,
+			`# Workflow: invalid-test
+
+## Config
+- base: main
+- on_conflict: explode
+
+## Tasks
+
+### task1
+- files: src/**
+- executor: claude-code
+- depends: []
+- on_conflict: kaboom
+- prompt: Do work
+`,
+		);
+
+		const wf = parseWorkflow(path);
+		assert.equal(wf.config.onConflict, "fail");
+		assert.equal(wf.tasks[0].onConflict, "fail");
+	});
+});
