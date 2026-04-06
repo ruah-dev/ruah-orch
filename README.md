@@ -206,16 +206,18 @@ Every command supports `--json` for programmatic consumption by agents.
 
 Planned features for upcoming releases:
 
-- [ ] **Task retry** — `ruah task retry <name>` to re-execute failed tasks without recreating worktrees
+- [x] **Task retry** — `ruah task retry <name>` to re-execute failed tasks without recreating worktrees
 - [ ] **Task logs** — `ruah task log <name>` to view execution output from completed/failed tasks
 - [ ] **Watch mode** — `ruah watch` for live task status dashboard in the terminal
 - [ ] **Task timeouts** — TTL per task with configurable auto-cancel on expiry
 - [ ] **Webhook notifications** — notify external services (Slack, Discord, n8n) on task state changes
-- [ ] **Config file** — `.ruahrc` or `package.json` `"ruah"` section for project defaults (base branch, default executor, timeout)
+- [x] **Config file** — `.ruahrc` or `package.json` `"ruah"` section for project defaults (base branch, default executor, timeout)
 - [ ] **Plugin executors** — user-defined executor adapters loaded from config
 - [ ] **Conflict resolution strategies** — configurable merge conflict handling (fail, ours, manual)
 - [ ] **Task priority** — weighted scheduling within workflow stages
-- [ ] **Workflow templates** — `ruah workflow create <name>` to scaffold workflow files from templates
+- [x] **Workflow templates** — `ruah workflow create <name>` to scaffold workflow files from templates
+- [ ] **Claude Code plugin** — native Claude Code extension/MCP server for ruah task management from within Claude Code sessions
+- [ ] **Codex plugin** — OpenAI Codex CLI plugin for seamless ruah orchestration from Codex agents
 
 ## Releasing
 
