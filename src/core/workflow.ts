@@ -1,9 +1,12 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 
+export type ConflictStrategy = "fail" | "rebase" | "retry";
+
 export interface WorkflowConfig {
 	base: string;
 	parallel: boolean;
+	onConflict: ConflictStrategy;
 }
 
 export interface WorkflowTask {
@@ -12,6 +15,7 @@ export interface WorkflowTask {
 	executor: string | null;
 	depends: string[];
 	prompt: string;
+	onConflict: ConflictStrategy;
 }
 
 export interface Workflow {
@@ -35,7 +39,11 @@ export function parseWorkflow(filePath: string): Workflow {
 	const lines = content.split("\n");
 
 	let name = "unnamed";
-	const config: WorkflowConfig = { base: "main", parallel: false };
+	const config: WorkflowConfig = {
+		base: "main",
+		parallel: false,
+		onConflict: "fail",
+	};
 	const tasks: WorkflowTask[] = [];
 
 	let section: "config" | "tasks" | null = null;
@@ -82,6 +90,12 @@ export function parseWorkflow(filePath: string): Workflow {
 				const val = configMatch[2].trim();
 				if (key === "base") config.base = val;
 				if (key === "parallel") config.parallel = val === "true";
+				if (key === "on_conflict" || key === "onconflict") {
+					const strategy = val as ConflictStrategy;
+					if (["fail", "rebase", "retry"].includes(strategy)) {
+						config.onConflict = strategy;
+					}
+				}
 			}
 			continue;
 		}
@@ -98,6 +112,7 @@ export function parseWorkflow(filePath: string): Workflow {
 					executor: null,
 					depends: [],
 					prompt: "",
+					onConflict: "fail",
 				};
 				inPrompt = false;
 				continue;
@@ -142,6 +157,11 @@ export function parseWorkflow(filePath: string): Workflow {
 								.map((d) => d.trim())
 								.filter(Boolean)
 						: [];
+				} else if (key === "on_conflict" || key === "onconflict") {
+					const strategy = val as ConflictStrategy;
+					if (["fail", "rebase", "retry"].includes(strategy)) {
+						currentTask.onConflict = strategy;
+					}
 				} else if (key === "prompt") {
 					if (val === "|" || val === "") {
 						// Multi-line prompt starts on next line

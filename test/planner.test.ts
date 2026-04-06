@@ -23,7 +23,14 @@ function tmpRoot(): string {
 }
 
 function makeTask(name: string, files: string[]): WorkflowTask {
-	return { name, files, executor: null, depends: [], prompt: "" };
+	return {
+		name,
+		files,
+		executor: null,
+		depends: [],
+		prompt: "",
+		onConflict: "fail",
+	};
 }
 
 /** Extract a value from a Map, failing the test if the key is missing. */
