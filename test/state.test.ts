@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
+import type { RuahState } from "../src/core/state.js";
 import {
 	acquireLocks,
 	addHistoryEntry,
@@ -17,14 +18,14 @@ import {
 	saveState,
 } from "../src/core/state.js";
 
-function tmpRoot() {
+function tmpRoot(): string {
 	const dir = join(tmpdir(), `ruah-test-${randomBytes(4).toString("hex")}`);
 	mkdirSync(dir, { recursive: true });
 	return dir;
 }
 
 describe("state", () => {
-	let root;
+	let root: string;
 
 	beforeEach(() => {
 		root = tmpRoot();
@@ -46,7 +47,10 @@ describe("state", () => {
 	it("saveState writes valid JSON and loadState reads it back", () => {
 		const state = loadState(root);
 		state.baseBranch = "develop";
-		state.tasks.foo = { name: "foo", status: "created" };
+		state.tasks.foo = {
+			name: "foo",
+			status: "created",
+		} as RuahState["tasks"][string];
 		saveState(root, state);
 
 		const loaded = loadState(root);
@@ -83,14 +87,14 @@ describe("state", () => {
 
 describe("file locks", () => {
 	it("acquireLocks succeeds with no conflicts", () => {
-		const state = { locks: {} };
+		const state = { locks: {} } as unknown as RuahState;
 		const result = acquireLocks(state, "auth", ["src/auth/**"]);
 		assert.ok(result.success);
 		assert.deepEqual(state.locks.auth, ["src/auth/**"]);
 	});
 
 	it("acquireLocks detects overlapping patterns", () => {
-		const state = { locks: { auth: ["src/auth/**"] } };
+		const state = { locks: { auth: ["src/auth/**"] } } as unknown as RuahState;
 		const result = acquireLocks(state, "api", ["src/auth/**"]);
 		assert.ok(!result.success);
 		assert.equal(result.conflicts.length, 1);
@@ -98,19 +102,21 @@ describe("file locks", () => {
 	});
 
 	it("acquireLocks allows non-overlapping patterns", () => {
-		const state = { locks: { auth: ["src/auth/**"] } };
+		const state = { locks: { auth: ["src/auth/**"] } } as unknown as RuahState;
 		const result = acquireLocks(state, "api", ["src/api/**"]);
 		assert.ok(result.success);
 	});
 
 	it("acquireLocks succeeds with empty patterns", () => {
-		const state = { locks: { auth: ["src/auth/**"] } };
+		const state = { locks: { auth: ["src/auth/**"] } } as unknown as RuahState;
 		const result = acquireLocks(state, "api", []);
 		assert.ok(result.success);
 	});
 
 	it("releaseLocks removes lock entry", () => {
-		const state = { locks: { auth: ["src/auth/**"], api: ["src/api/**"] } };
+		const state = {
+			locks: { auth: ["src/auth/**"], api: ["src/api/**"] },
+		} as unknown as RuahState;
 		releaseLocks(state, "auth");
 		assert.ok(!state.locks.auth);
 		assert.ok(state.locks.api);
@@ -146,7 +152,9 @@ describe("patternsOverlap", () => {
 
 describe("subtask state functions", () => {
 	it("acquireLocks validates subtask within parent scope", () => {
-		const state = { locks: { parent: ["src/auth/**"] } };
+		const state = {
+			locks: { parent: ["src/auth/**"] },
+		} as unknown as RuahState;
 		// Within scope — should succeed
 		const ok = acquireLocks(state, "child", ["src/auth/api/**"], "parent");
 		assert.ok(ok.success);
@@ -158,13 +166,13 @@ describe("subtask state functions", () => {
 	});
 
 	it("acquireLocks allows subtask when parent has no locks", () => {
-		const state = { locks: {} };
+		const state = { locks: {} } as unknown as RuahState;
 		const result = acquireLocks(state, "child", ["src/anything/**"], "parent");
 		assert.ok(result.success);
 	});
 
 	it("subtask does not conflict with parent locks", () => {
-		const state = { locks: { parent: ["src/**"] } };
+		const state = { locks: { parent: ["src/**"] } } as unknown as RuahState;
 		// Subtask within parent's scope should not conflict with parent
 		const result = acquireLocks(state, "child", ["src/auth/**"], "parent");
 		assert.ok(result.success);
@@ -173,7 +181,7 @@ describe("subtask state functions", () => {
 	it("sibling subtasks can conflict", () => {
 		const state = {
 			locks: { parent: ["src/**"], child1: ["src/auth/**"] },
-		};
+		} as unknown as RuahState;
 		const result = acquireLocks(state, "child2", ["src/auth/**"], "parent");
 		assert.ok(!result.success);
 	});
@@ -187,7 +195,7 @@ describe("subtask state functions", () => {
 				grandchild: { name: "grandchild", parent: "child1" },
 				unrelated: { name: "unrelated", parent: null },
 			},
-		};
+		} as unknown as RuahState;
 		const children = getChildren(state, "root");
 		assert.equal(children.length, 2);
 		assert.ok(children.some((c) => c.name === "child1"));
@@ -202,7 +210,7 @@ describe("subtask state functions", () => {
 				b: { name: "b", parent: "root", status: "in-progress" },
 				c: { name: "c", parent: "root", status: "cancelled" },
 			},
-		};
+		} as unknown as RuahState;
 		const unmerged = getUnmergedChildren(state, "root");
 		assert.equal(unmerged.length, 1);
 		assert.equal(unmerged[0].name, "b");
@@ -215,7 +223,7 @@ describe("subtask state functions", () => {
 				mid: { name: "mid", parent: "root" },
 				leaf: { name: "leaf", parent: "mid" },
 			},
-		};
+		} as unknown as RuahState;
 		const lineage = getTaskLineage(state, "leaf");
 		assert.deepStrictEqual(lineage, ["root", "mid", "leaf"]);
 	});

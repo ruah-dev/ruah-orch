@@ -4,8 +4,6 @@ Multi-agent orchestration CLI. Workspace isolation, DAG scheduling, file locking
 
 When multiple AI agents (Claude Code, Aider, Codex, etc.) work on the same codebase simultaneously, their edits collide. ruah solves this with git worktrees for isolation, a DAG scheduler for task ordering, advisory file locks to prevent conflicts, and dependency-ordered merging.
 
-**crag-aware, not crag-dependent.** When [crag](https://www.npmjs.com/package/@whitehatd/crag) governance is present, ruah automatically enforces quality gates before merging. Without crag, ruah works standalone.
-
 ## Install
 
 ```bash

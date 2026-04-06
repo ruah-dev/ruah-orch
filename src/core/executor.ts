@@ -2,7 +2,36 @@ import { spawn } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-const ADAPTERS = {
+interface AdapterResult {
+	command: string;
+	args: string[];
+}
+
+export interface TaskDef {
+	name: string;
+	executor?: string | null;
+	prompt?: string | null;
+	parent?: string | null;
+	files?: string[];
+	repoRoot?: string;
+}
+
+export interface ExecuteOptions {
+	dryRun?: boolean;
+	silent?: boolean;
+}
+
+export interface ExecuteResult {
+	success: boolean;
+	exitCode?: number | null;
+	stdout?: string;
+	stderr?: string;
+	error?: string | null;
+	command?: string;
+	dryRun?: boolean;
+}
+
+const ADAPTERS: Record<string, (prompt: string) => AdapterResult> = {
 	"claude-code": (prompt) => ({
 		command: "claude",
 		args: ["-p", prompt, "--dangerously-skip-permissions"],
@@ -28,18 +57,23 @@ const ADAPTERS = {
 	},
 };
 
-export function getAvailableExecutors() {
+export function getAvailableExecutors(): string[] {
 	return Object.keys(ADAPTERS);
 }
 
-export function executeTask(taskDef, worktreePath, opts = {}) {
+export function executeTask(
+	taskDef: TaskDef,
+	worktreePath: string,
+	opts: ExecuteOptions = {},
+): Promise<ExecuteResult> {
 	const { dryRun, silent } = opts;
 	const prompt = taskDef.prompt || "";
 	const executorName = taskDef.executor || "script";
 
 	// Resolve adapter
 	const adapter = ADAPTERS[executorName];
-	let cmd, args;
+	let cmd: string;
+	let args: string[];
 
 	if (adapter) {
 		const resolved = adapter(prompt);
@@ -58,7 +92,7 @@ export function executeTask(taskDef, worktreePath, opts = {}) {
 		? `\n## Parent Task\n- Parent: ${taskDef.parent}\n- This is a subtask — merges into parent branch, not base.\n`
 		: "";
 	const filesInfo =
-		taskDef.files?.length > 0
+		taskDef.files && taskDef.files.length > 0
 			? `\n## File Scope\n- Locked files: ${taskDef.files.join(", ")}\n`
 			: "";
 	const subagentGuide = `
@@ -83,7 +117,7 @@ Available executors: claude-code, aider, codex, open-code, script
 Environment variables available:
 - RUAH_TASK=${taskDef.name}
 - RUAH_WORKTREE=${worktreePath}
-- RUAH_EXECUTOR=${executorName}${taskDef.parent ? `\n- RUAH_PARENT_TASK=${taskDef.parent}` : ""}${taskDef.repoRoot ? `\n- RUAH_ROOT=${taskDef.repoRoot}` : ""}${taskDef.files?.length > 0 ? `\n- RUAH_FILES=${taskDef.files.join(",")}` : ""}
+- RUAH_EXECUTOR=${executorName}${taskDef.parent ? `\n- RUAH_PARENT_TASK=${taskDef.parent}` : ""}${taskDef.repoRoot ? `\n- RUAH_ROOT=${taskDef.repoRoot}` : ""}${taskDef.files && taskDef.files.length > 0 ? `\n- RUAH_FILES=${taskDef.files.join(",")}` : ""}
 `;
 	writeFileSync(
 		taskFile,
@@ -100,12 +134,12 @@ Environment variables available:
 	}
 
 	return new Promise((resolve) => {
-		const taskEnv = {
+		const taskEnv: Record<string, string> = {
 			...process.env,
 			RUAH_TASK: taskDef.name,
 			RUAH_WORKTREE: worktreePath,
 			RUAH_EXECUTOR: executorName,
-		};
+		} as Record<string, string>;
 
 		// Subagent context: pass parent info + repo root so spawned CLIs
 		// can call `ruah task create --parent $RUAH_TASK` from within execution
@@ -116,7 +150,7 @@ Environment variables available:
 			taskEnv.RUAH_ROOT = taskDef.repoRoot;
 		}
 		// Pass file lock scope so agents know their boundaries
-		if (taskDef.files?.length > 0) {
+		if (taskDef.files && taskDef.files.length > 0) {
 			taskEnv.RUAH_FILES = taskDef.files.join(",");
 		}
 
@@ -131,12 +165,12 @@ Environment variables available:
 		let stderr = "";
 
 		if (silent && child.stdout) {
-			child.stdout.on("data", (data) => {
+			child.stdout.on("data", (data: Buffer) => {
 				stdout += data;
 			});
 		}
 		if (silent && child.stderr) {
-			child.stderr.on("data", (data) => {
+			child.stderr.on("data", (data: Buffer) => {
 				stderr += data;
 			});
 		}

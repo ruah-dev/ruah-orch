@@ -4,19 +4,24 @@
 	"description": "Multi-agent orchestration. Workspace isolation, DAG scheduling, file locking, subagent spawning, merge coordination. crag-aware.",
 	"type": "module",
 	"bin": {
-		"ruah": "src/cli.js"
+		"ruah": "dist/cli.js"
 	},
 	"files": [
-		"src/",
+		"dist/",
 		"LICENSE",
 		"README.md"
 	],
 	"scripts": {
-		"start": "node src/cli.js",
-		"test": "node --test test/*.test.js",
-		"lint": "npx @biomejs/biome check .",
-		"format": "npx @biomejs/biome check --write .",
-		"prepublishOnly": "node --test test/*.test.js"
+		"build": "tsc",
+		"dev": "tsc --watch",
+		"start": "node dist/cli.js",
+		"pretest": "tsc -p tsconfig.test.json",
+		"test": "node --test dist-test/test/*.test.js",
+		"lint": "biome check .",
+		"format": "biome check --write .",
+		"typecheck": "tsc --noEmit",
+		"clean": "rm -rf dist dist-test",
+		"prepublishOnly": "npm run clean && npm run build && npm test"
 	},
 	"keywords": [
 		"ai",
@@ -43,5 +48,10 @@
 	"homepage": "https://github.com/levi-tc/ruah#readme",
 	"engines": {
 		"node": ">=18.0.0"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.4.10",
+		"@types/node": "^25.5.2",
+		"typescript": "^6.0.2"
 	}
 }

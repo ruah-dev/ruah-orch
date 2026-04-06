@@ -4,6 +4,7 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
+import type { Governance } from "../src/core/integrations.js";
 import {
 	buildGateCommands,
 	detectArhy,
@@ -14,14 +15,14 @@ import {
 	runGates,
 } from "../src/core/integrations.js";
 
-function tmpDir() {
+function tmpDir(): string {
 	const dir = join(tmpdir(), `ruah-int-${randomBytes(4).toString("hex")}`);
 	mkdirSync(dir, { recursive: true });
 	return dir;
 }
 
 describe("crag detection", () => {
-	let dir;
+	let dir: string;
 	beforeEach(() => {
 		dir = tmpDir();
 	});
@@ -100,7 +101,7 @@ describe("parseGovernance", () => {
 
 describe("buildGateCommands", () => {
 	it("produces correct command list with cwd", () => {
-		const governance = {
+		const governance: Governance = {
 			gates: [
 				{
 					command: "npm test",
@@ -125,7 +126,7 @@ describe("buildGateCommands", () => {
 
 describe("runGates", () => {
 	it("passes when all commands succeed", () => {
-		const governance = {
+		const governance: Governance = {
 			gates: [
 				{
 					command: "true",
@@ -142,7 +143,7 @@ describe("runGates", () => {
 	});
 
 	it("fails on mandatory gate failure", () => {
-		const governance = {
+		const governance: Governance = {
 			gates: [
 				{
 					command: "false",
@@ -158,7 +159,7 @@ describe("runGates", () => {
 	});
 
 	it("continues on optional gate failure", () => {
-		const governance = {
+		const governance: Governance = {
 			gates: [
 				{
 					command: "false",
@@ -181,7 +182,7 @@ describe("runGates", () => {
 	});
 
 	it("continues on advisory gate failure", () => {
-		const governance = {
+		const governance: Governance = {
 			gates: [
 				{
 					command: "false",
@@ -197,7 +198,7 @@ describe("runGates", () => {
 });
 
 describe("arhy detection", () => {
-	let dir;
+	let dir: string;
 	beforeEach(() => {
 		dir = tmpDir();
 	});

@@ -1,16 +1,45 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 
-export function parseWorkflow(filePath) {
+export interface WorkflowConfig {
+	base: string;
+	parallel: boolean;
+}
+
+export interface WorkflowTask {
+	name: string;
+	files: string[];
+	executor: string | null;
+	depends: string[];
+	prompt: string;
+}
+
+export interface Workflow {
+	name: string;
+	config: WorkflowConfig;
+	tasks: WorkflowTask[];
+}
+
+export interface DAGValidation {
+	valid: boolean;
+	errors: string[];
+}
+
+export interface WorkflowEntry {
+	name: string;
+	path: string;
+}
+
+export function parseWorkflow(filePath: string): Workflow {
 	const content = readFileSync(filePath, "utf-8");
 	const lines = content.split("\n");
 
 	let name = "unnamed";
-	const config = { base: "main", parallel: false };
-	const tasks = [];
+	const config: WorkflowConfig = { base: "main", parallel: false };
+	const tasks: WorkflowTask[] = [];
 
-	let section = null; // 'config' | 'tasks'
-	let currentTask = null;
+	let section: "config" | "tasks" | null = null;
+	let currentTask: WorkflowTask | null = null;
 	let inPrompt = false;
 	let promptIndent = 0;
 
@@ -86,9 +115,9 @@ export function parseWorkflow(filePath) {
 					continue;
 				}
 				// Dedent based on first prompt line
-				const content =
+				const lineContent =
 					line.length > promptIndent ? line.slice(promptIndent) : trimmed;
-				currentTask.prompt += (currentTask.prompt ? "\n" : "") + content;
+				currentTask.prompt += (currentTask.prompt ? "\n" : "") + lineContent;
 				continue;
 			}
 
@@ -137,14 +166,14 @@ export function parseWorkflow(filePath) {
 	return { name, config, tasks };
 }
 
-function finishTask(task, tasks) {
+function finishTask(task: WorkflowTask, tasks: WorkflowTask[]): void {
 	task.prompt = task.prompt.trim();
 	tasks.push(task);
 }
 
-export function validateDAG(tasks) {
+export function validateDAG(tasks: WorkflowTask[]): DAGValidation {
 	const names = new Set(tasks.map((t) => t.name));
-	const errors = [];
+	const errors: string[] = [];
 
 	// Check missing dependencies
 	for (const task of tasks) {
@@ -158,11 +187,11 @@ export function validateDAG(tasks) {
 	}
 
 	// Detect cycles via topological sort
-	const visited = new Set();
-	const stack = new Set();
+	const visited = new Set<string>();
+	const stack = new Set<string>();
 	const taskMap = Object.fromEntries(tasks.map((t) => [t.name, t]));
 
-	function dfs(name) {
+	function dfs(name: string): void {
 		if (stack.has(name)) {
 			errors.push(`Circular dependency detected involving "${name}"`);
 			return;
@@ -187,15 +216,15 @@ export function validateDAG(tasks) {
 	return { valid: errors.length === 0, errors };
 }
 
-export function getExecutionPlan(tasks) {
+export function getExecutionPlan(tasks: WorkflowTask[]): WorkflowTask[][] {
 	const taskMap = Object.fromEntries(tasks.map((t) => [t.name, t]));
 	const remaining = new Set(tasks.map((t) => t.name));
-	const completed = new Set();
-	const stages = [];
+	const completed = new Set<string>();
+	const stages: WorkflowTask[][] = [];
 
 	while (remaining.size > 0) {
 		// Find tasks whose dependencies are all satisfied
-		const ready = [];
+		const ready: WorkflowTask[] = [];
 		for (const name of remaining) {
 			const task = taskMap[name];
 			const depsReady = task.depends.every((d) => completed.has(d));
@@ -217,7 +246,7 @@ export function getExecutionPlan(tasks) {
 	return stages;
 }
 
-export function listWorkflows(dir) {
+export function listWorkflows(dir: string): WorkflowEntry[] {
 	try {
 		return readdirSync(dir)
 			.filter((f) => f.endsWith(".md"))

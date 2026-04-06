@@ -1,7 +1,32 @@
 import { execSync } from "node:child_process";
 import { join } from "node:path";
 
-function git(cmd, opts = {}) {
+interface GitOptions {
+	cwd?: string;
+	silent?: boolean;
+	ignoreError?: boolean;
+}
+
+export interface WorktreeInfo {
+	worktreePath: string;
+	branchName: string;
+}
+
+export interface MergeResult {
+	success: boolean;
+	conflicts: string[];
+}
+
+export interface MergeOptions {
+	parentWorktree?: string;
+}
+
+export interface WorktreeEntry {
+	path: string;
+	branch?: string;
+}
+
+function git(cmd: string, opts: GitOptions = {}): string {
 	const { cwd, silent, ignoreError } = opts;
 	try {
 		const result = execSync(`git ${cmd}`, {
@@ -10,14 +35,16 @@ function git(cmd, opts = {}) {
 			stdio: silent ? "pipe" : ["pipe", "pipe", "pipe"],
 		});
 		return result.trim();
-	} catch (err) {
+	} catch (err: unknown) {
 		if (ignoreError) return "";
-		const stderr = err.stderr?.trim() || err.message;
+		const stderr =
+			(err as { stderr?: string })?.stderr?.trim() ||
+			(err instanceof Error ? err.message : String(err));
 		throw new Error(`git ${cmd.split(" ")[0]} failed: ${stderr}`);
 	}
 }
 
-export function isGitRepo(cwd) {
+export function isGitRepo(cwd?: string): boolean {
 	try {
 		execSync("git rev-parse --is-inside-work-tree", {
 			encoding: "utf-8",
@@ -30,15 +57,15 @@ export function isGitRepo(cwd) {
 	}
 }
 
-export function getCurrentBranch(cwd) {
+export function getCurrentBranch(cwd?: string): string {
 	return git("rev-parse --abbrev-ref HEAD", { cwd, silent: true });
 }
 
-export function getRepoRoot(cwd) {
+export function getRepoRoot(cwd?: string): string {
 	return git("rev-parse --show-toplevel", { cwd, silent: true });
 }
 
-export function branchExists(name, cwd) {
+export function branchExists(name: string, cwd?: string): boolean {
 	try {
 		git(`rev-parse --verify ${name}`, { cwd, silent: true });
 		return true;
@@ -47,11 +74,15 @@ export function branchExists(name, cwd) {
 	}
 }
 
-export function sanitizeName(name) {
+export function sanitizeName(name: string): string {
 	return name.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
-export function createWorktree(taskName, baseBranch, repoRoot) {
+export function createWorktree(
+	taskName: string,
+	baseBranch: string,
+	repoRoot: string,
+): WorktreeInfo {
 	const safe = sanitizeName(taskName);
 	const branchName = `ruah/${safe}`;
 	const worktreePath = join(repoRoot, ".ruah", "worktrees", safe);
@@ -68,7 +99,7 @@ export function createWorktree(taskName, baseBranch, repoRoot) {
 	return { worktreePath, branchName };
 }
 
-export function removeWorktree(taskName, repoRoot) {
+export function removeWorktree(taskName: string, repoRoot: string): void {
 	const safe = sanitizeName(taskName);
 	const branchName = `ruah/${safe}`;
 	const worktreePath = join(repoRoot, ".ruah", "worktrees", safe);
@@ -85,7 +116,12 @@ export function removeWorktree(taskName, repoRoot) {
 	});
 }
 
-export function mergeWorktree(taskName, baseBranch, repoRoot, opts = {}) {
+export function mergeWorktree(
+	taskName: string,
+	baseBranch: string,
+	repoRoot: string,
+	opts: MergeOptions = {},
+): MergeResult {
 	const safe = sanitizeName(taskName);
 	const branchName = `ruah/${safe}`;
 
@@ -127,7 +163,11 @@ export function mergeWorktree(taskName, baseBranch, repoRoot, opts = {}) {
 	}
 }
 
-export function getWorktreeDiff(taskName, baseBranch, repoRoot) {
+export function getWorktreeDiff(
+	taskName: string,
+	baseBranch: string,
+	repoRoot: string,
+): string {
 	const safe = sanitizeName(taskName);
 	const branchName = `ruah/${safe}`;
 	return git(`diff ${baseBranch}...${branchName} --stat`, {
@@ -136,29 +176,32 @@ export function getWorktreeDiff(taskName, baseBranch, repoRoot) {
 	});
 }
 
-export function listWorktrees(repoRoot) {
-	const raw = git("worktree list --porcelain", { cwd: repoRoot, silent: true });
+export function listWorktrees(repoRoot: string): WorktreeEntry[] {
+	const raw = git("worktree list --porcelain", {
+		cwd: repoRoot,
+		silent: true,
+	});
 	if (!raw) return [];
 
-	const worktrees = [];
-	let current = {};
+	const worktrees: WorktreeEntry[] = [];
+	let current: Partial<WorktreeEntry> = {};
 	for (const line of raw.split("\n")) {
 		if (line.startsWith("worktree ")) {
-			if (current.path) worktrees.push(current);
+			if (current.path) worktrees.push(current as WorktreeEntry);
 			current = { path: line.slice(9) };
 		} else if (line.startsWith("branch ")) {
 			current.branch = line.slice(7);
 		} else if (line === "") {
-			if (current.path) worktrees.push(current);
+			if (current.path) worktrees.push(current as WorktreeEntry);
 			current = {};
 		}
 	}
-	if (current.path) worktrees.push(current);
+	if (current.path) worktrees.push(current as WorktreeEntry);
 
 	return worktrees.filter((w) => w.branch?.includes("ruah/"));
 }
 
-export function hasUncommittedChanges(cwd) {
+export function hasUncommittedChanges(cwd?: string): boolean {
 	const status = git("status --porcelain", { cwd, silent: true });
 	return status.length > 0;
 }

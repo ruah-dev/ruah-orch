@@ -4,9 +4,62 @@ import { join } from "node:path";
 
 // --- crag Integration ---
 
+export interface CragDetection {
+	detected: boolean;
+	path: string | null;
+	absolute: string | null;
+}
+
+export interface Gate {
+	command: string;
+	classification: "MANDATORY" | "OPTIONAL" | "ADVISORY";
+	section: string | null;
+	path: string | null;
+}
+
+export interface Governance {
+	gates: Gate[];
+}
+
+export interface GateCommand extends Gate {
+	cwd: string;
+}
+
+export interface GateRunResult extends GateCommand {
+	success: boolean;
+	error?: string;
+}
+
+export interface GateResult {
+	passed: boolean;
+	results: GateRunResult[];
+	failedGate?: GateRunResult;
+}
+
+export interface ArhyDetection {
+	detected: boolean;
+	files: string[];
+}
+
+export interface ArhyField {
+	name: string;
+	type: string;
+}
+
+export interface ArhyEntity {
+	name: string;
+	fields: ArhyField[];
+	actions: string[];
+	events: string[];
+}
+
+export interface ArhyContract {
+	entities: ArhyEntity[];
+}
+
 const GOVERNANCE_PATHS = [".claude/governance.md", "governance.md"];
 
-export function detectCrag(root) {
+export function detectCrag(root: string): CragDetection {
 	for (const rel of GOVERNANCE_PATHS) {
 		const abs = join(root, rel);
 		if (existsSync(abs)) {
@@ -16,19 +69,19 @@ export function detectCrag(root) {
 	return { detected: false, path: null, absolute: null };
 }
 
-export function readCragGovernance(root) {
+export function readCragGovernance(root: string): Governance | null {
 	const crag = detectCrag(root);
-	if (!crag.detected) return null;
+	if (!crag.detected || !crag.absolute) return null;
 
 	const content = readFileSync(crag.absolute, "utf-8");
 	return parseGovernance(content);
 }
 
-export function parseGovernance(content) {
-	const gates = [];
+export function parseGovernance(content: string): Governance {
+	const gates: Gate[] = [];
 	let inGates = false;
-	let currentSection = null;
-	let currentPath = null;
+	let currentSection: string | null = null;
+	let currentPath: string | null = null;
 
 	for (const line of content.split("\n")) {
 		// Detect ## Gates section
@@ -57,7 +110,9 @@ export function parseGovernance(content) {
 		const gateMatch = line.match(/^-\s+(.+?)(?:\s+#\s*\[(\w+)\])?\s*$/);
 		if (gateMatch) {
 			const command = gateMatch[1].trim();
-			const classification = (gateMatch[2] || "MANDATORY").toUpperCase();
+			const classification = (
+				gateMatch[2] || "MANDATORY"
+			).toUpperCase() as Gate["classification"];
 
 			if (!["MANDATORY", "OPTIONAL", "ADVISORY"].includes(classification))
 				continue;
@@ -74,20 +129,27 @@ export function parseGovernance(content) {
 	return { gates };
 }
 
-export function buildGateCommands(governance, worktreePath) {
+export function buildGateCommands(
+	governance: Governance | null,
+	worktreePath: string,
+): GateCommand[] {
 	if (!governance?.gates) return [];
 
 	return governance.gates.map((gate) => ({
 		command: gate.command,
 		classification: gate.classification,
 		section: gate.section,
+		path: gate.path,
 		cwd: gate.path ? join(worktreePath, gate.path) : worktreePath,
 	}));
 }
 
-export function runGates(governance, worktreePath) {
+export function runGates(
+	governance: Governance,
+	worktreePath: string,
+): GateResult {
 	const commands = buildGateCommands(governance, worktreePath);
-	const results = [];
+	const results: GateRunResult[] = [];
 	let passed = true;
 
 	for (const gate of commands) {
@@ -98,11 +160,14 @@ export function runGates(governance, worktreePath) {
 				stdio: "pipe",
 			});
 			results.push({ ...gate, success: true });
-		} catch (err) {
-			const result = {
+		} catch (err: unknown) {
+			const error =
+				(err as { stderr?: string })?.stderr?.trim() ||
+				(err instanceof Error ? err.message : String(err));
+			const result: GateRunResult = {
 				...gate,
 				success: false,
-				error: err.stderr?.trim() || err.message,
+				error,
 			};
 			results.push(result);
 
@@ -119,7 +184,7 @@ export function runGates(governance, worktreePath) {
 
 // --- arhy Integration ---
 
-export function detectArhy(root) {
+export function detectArhy(root: string): ArhyDetection {
 	try {
 		const files = readdirSync(root).filter((f) => f.endsWith(".arhy"));
 		if (files.length > 0) {
@@ -131,16 +196,16 @@ export function detectArhy(root) {
 	return { detected: false, files: [] };
 }
 
-export function readArhyContract(filePath) {
+export function readArhyContract(filePath: string): ArhyContract | null {
 	if (!existsSync(filePath)) return null;
 
 	const content = readFileSync(filePath, "utf-8");
 	return parseArhyContract(content);
 }
 
-export function parseArhyContract(content) {
-	const entities = [];
-	let current = null;
+export function parseArhyContract(content: string): ArhyContract {
+	const entities: ArhyEntity[] = [];
+	let current: ArhyEntity | null = null;
 
 	for (const line of content.split("\n")) {
 		const trimmed = line.trim();
@@ -150,7 +215,12 @@ export function parseArhyContract(content) {
 		const entityMatch = trimmed.match(/^entity\s+(\w+)\s*\{?\s*$/);
 		if (entityMatch) {
 			if (current) entities.push(current);
-			current = { name: entityMatch[1], fields: [], actions: [], events: [] };
+			current = {
+				name: entityMatch[1],
+				fields: [],
+				actions: [],
+				events: [],
+			};
 			continue;
 		}
 
@@ -180,7 +250,10 @@ export function parseArhyContract(content) {
 		// Field (simple: name: type)
 		const fieldMatch = trimmed.match(/^(\w+)\s*:\s*(.+)$/);
 		if (fieldMatch) {
-			current.fields.push({ name: fieldMatch[1], type: fieldMatch[2].trim() });
+			current.fields.push({
+				name: fieldMatch[1],
+				type: fieldMatch[2].trim(),
+			});
 		}
 	}
 
@@ -188,10 +261,12 @@ export function parseArhyContract(content) {
 	return { entities };
 }
 
-export function inferFileBoundaries(contract) {
+export function inferFileBoundaries(
+	contract: ArhyContract | null,
+): Record<string, string[]> {
 	if (!contract?.entities) return {};
 
-	const boundaries = {};
+	const boundaries: Record<string, string[]> = {};
 	for (const entity of contract.entities) {
 		const lower = entity.name.toLowerCase();
 		const plural = lower.endsWith("s") ? lower : `${lower}s`;

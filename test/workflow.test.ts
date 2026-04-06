@@ -4,26 +4,27 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
+import type { WorkflowTask } from "../src/core/workflow.js";
 import {
 	getExecutionPlan,
 	parseWorkflow,
 	validateDAG,
 } from "../src/core/workflow.js";
 
-function tmpDir() {
+function tmpDir(): string {
 	const dir = join(tmpdir(), `ruah-wf-${randomBytes(4).toString("hex")}`);
 	mkdirSync(dir, { recursive: true });
 	return dir;
 }
 
-function writeWorkflow(dir, content) {
+function writeWorkflow(dir: string, content: string): string {
 	const path = join(dir, "test.md");
 	writeFileSync(path, content, "utf-8");
 	return path;
 }
 
 describe("parseWorkflow", () => {
-	let dir;
+	let dir: string;
 
 	beforeEach(() => {
 		dir = tmpDir();
@@ -129,13 +130,15 @@ describe("validateDAG", () => {
 			{ name: "b", depends: ["a"] },
 			{ name: "c", depends: ["a"] },
 			{ name: "d", depends: ["b", "c"] },
-		];
+		] as unknown as WorkflowTask[];
 		const result = validateDAG(tasks);
 		assert.ok(result.valid);
 	});
 
 	it("catches missing dependency reference", () => {
-		const tasks = [{ name: "a", depends: ["nonexistent"] }];
+		const tasks = [
+			{ name: "a", depends: ["nonexistent"] },
+		] as unknown as WorkflowTask[];
 		const result = validateDAG(tasks);
 		assert.ok(!result.valid);
 		assert.ok(result.errors[0].includes("nonexistent"));
@@ -145,14 +148,14 @@ describe("validateDAG", () => {
 		const tasks = [
 			{ name: "a", depends: ["b"] },
 			{ name: "b", depends: ["a"] },
-		];
+		] as unknown as WorkflowTask[];
 		const result = validateDAG(tasks);
 		assert.ok(!result.valid);
 		assert.ok(result.errors.some((e) => e.includes("Circular")));
 	});
 
 	it("catches self-dependency", () => {
-		const tasks = [{ name: "a", depends: ["a"] }];
+		const tasks = [{ name: "a", depends: ["a"] }] as unknown as WorkflowTask[];
 		const result = validateDAG(tasks);
 		assert.ok(!result.valid);
 	});
@@ -164,7 +167,7 @@ describe("getExecutionPlan", () => {
 			{ name: "a", depends: [] },
 			{ name: "b", depends: ["a"] },
 			{ name: "c", depends: ["b"] },
-		];
+		] as unknown as WorkflowTask[];
 		const plan = getExecutionPlan(tasks);
 		assert.equal(plan.length, 3);
 		assert.equal(plan[0][0].name, "a");
@@ -177,7 +180,7 @@ describe("getExecutionPlan", () => {
 			{ name: "a", depends: [] },
 			{ name: "b", depends: [] },
 			{ name: "c", depends: ["a", "b"] },
-		];
+		] as unknown as WorkflowTask[];
 		const plan = getExecutionPlan(tasks);
 		assert.equal(plan.length, 2);
 		assert.equal(plan[0].length, 2); // a and b in parallel
@@ -186,7 +189,7 @@ describe("getExecutionPlan", () => {
 	});
 
 	it("handles single task", () => {
-		const tasks = [{ name: "solo", depends: [] }];
+		const tasks = [{ name: "solo", depends: [] }] as unknown as WorkflowTask[];
 		const plan = getExecutionPlan(tasks);
 		assert.equal(plan.length, 1);
 		assert.equal(plan[0][0].name, "solo");
@@ -198,7 +201,7 @@ describe("getExecutionPlan", () => {
 			{ name: "b", depends: ["a"] },
 			{ name: "c", depends: ["a"] },
 			{ name: "d", depends: ["b", "c"] },
-		];
+		] as unknown as WorkflowTask[];
 		const plan = getExecutionPlan(tasks);
 		assert.equal(plan.length, 3);
 		assert.equal(plan[0].length, 1); // a

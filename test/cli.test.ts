@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const CLI = join(__dirname, "..", "src", "cli.js");
 
-function ruah(args, cwd) {
+function ruah(args: string, cwd: string): string {
 	try {
 		return execSync(`node "${CLI}" ${args}`, {
 			cwd,
@@ -24,12 +24,13 @@ function ruah(args, cwd) {
 			stdio: "pipe",
 			env: { ...process.env, NO_COLOR: "1" },
 		});
-	} catch (err) {
-		return err.stdout + err.stderr;
+	} catch (err: unknown) {
+		const e = err as { stdout?: string; stderr?: string };
+		return (e.stdout || "") + (e.stderr || "");
 	}
 }
 
-function tmpGitRepo() {
+function tmpGitRepo(): string {
 	const dir = join(tmpdir(), `ruah-cli-${randomBytes(4).toString("hex")}`);
 	mkdirSync(dir, { recursive: true });
 	execSync("git init", { cwd: dir, stdio: "pipe" });
@@ -44,7 +45,7 @@ function tmpGitRepo() {
 }
 
 describe("CLI integration", () => {
-	let repo;
+	let repo: string;
 
 	beforeEach(() => {
 		repo = tmpGitRepo();
@@ -232,7 +233,7 @@ describe("CLI integration", () => {
 		const out = ruah("task children parent5 --json", repo);
 		const children = JSON.parse(out);
 		assert.equal(children.length, 2);
-		const names = children.map((c) => c.name);
+		const names = children.map((c: { name: string }) => c.name);
 		assert.ok(names.includes("child5a"));
 		assert.ok(names.includes("child5b"));
 	});

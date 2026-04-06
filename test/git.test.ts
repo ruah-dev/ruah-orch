@@ -16,7 +16,7 @@ import {
 	sanitizeName,
 } from "../src/core/git.js";
 
-function tmpGitRepo() {
+function tmpGitRepo(): string {
 	const dir = join(tmpdir(), `ruah-git-${randomBytes(4).toString("hex")}`);
 	mkdirSync(dir, { recursive: true });
 	execSync("git init", { cwd: dir, stdio: "pipe" });
@@ -31,7 +31,7 @@ function tmpGitRepo() {
 }
 
 describe("git", () => {
-	let repo;
+	let repo: string;
 
 	beforeEach(() => {
 		repo = tmpGitRepo();
@@ -101,6 +101,6 @@ describe("git", () => {
 		createWorktree("wt-test", branch, repo);
 		const wts = listWorktrees(repo);
 		assert.ok(wts.length >= 1);
-		assert.ok(wts.some((w) => w.branch.includes("ruah/wt-test")));
+		assert.ok(wts.some((w) => w.branch?.includes("ruah/wt-test")));
 	});
 });

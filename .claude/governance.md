@@ -7,12 +7,15 @@
 - Description: Multi-agent orchestration CLI. Workspace isolation, DAG scheduling, file locking, merge coordination.
 
 ## Gates (run in order, stop on failure)
+### Typecheck
+- npx tsc --noEmit
+
 ### Lint & Format
-- npx @biomejs/biome check --write .
-- npx @biomejs/biome check .
+- npx biome check --write .
+- npx biome check .
 
 ### Test
-- node --test test/*.test.js
+- npm test
 
 ## Branch Strategy
 - Trunk-based development on main
@@ -34,8 +37,9 @@
 - Strategy: npm version patch/minor/major → git push --tags → auto-publish
 
 ## Conventions
-- Node.js ESM (type: module)
+- TypeScript with strict mode
+- Node.js ESM (type: module), compiled via tsc to dist/
 - Zero runtime dependencies preferred (dev deps okay)
 - node --test for testing (Node.js built-in test runner)
 - Biome for lint + format
-- All source in src/, all tests in test/
+- All source in src/*.ts, all tests in test/*.ts

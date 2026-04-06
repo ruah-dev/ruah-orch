@@ -2,6 +2,11 @@
 
 import { label, logError } from "./utils/format.js";
 
+export interface ParsedArgs {
+	_: string[];
+	flags: Record<string, string | boolean>;
+}
+
 const VERSION = "0.1.0";
 
 const HELP = `
@@ -52,8 +57,8 @@ crag integration:
   No configuration needed — just have crag set up.
 `;
 
-function parseArgs(argv) {
-	const args = { _: [], flags: {} };
+export function parseArgs(argv: string[]): ParsedArgs {
+	const args: ParsedArgs = { _: [], flags: {} };
 	let i = 0;
 	while (i < argv.length) {
 		const arg = argv[i];
@@ -76,7 +81,7 @@ function parseArgs(argv) {
 	return args;
 }
 
-async function main() {
+async function main(): Promise<void> {
 	const args = parseArgs(process.argv.slice(2));
 
 	if (args.flags.help || args.flags.h) {
@@ -123,10 +128,11 @@ async function main() {
 				console.log(`Run ${label()} --help for usage`);
 				process.exit(1);
 		}
-	} catch (err) {
-		logError(err.message);
+	} catch (err: unknown) {
+		const message = err instanceof Error ? err.message : String(err);
+		logError(message);
 		if (process.env.RUAH_DEBUG) {
-			console.error(err.stack);
+			console.error(err instanceof Error ? err.stack : err);
 		}
 		process.exit(1);
 	}

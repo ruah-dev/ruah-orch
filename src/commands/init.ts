@@ -1,5 +1,6 @@
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import type { ParsedArgs } from "../cli.js";
 import { getCurrentBranch, getRepoRoot, isGitRepo } from "../core/git.js";
 import { detectCrag } from "../core/integrations.js";
 import {
@@ -47,7 +48,7 @@ const EXAMPLE_WORKFLOW = `# Workflow: example-feature
     Cover both API and UI interactions.
 `;
 
-export async function run(args) {
+export async function run(args: ParsedArgs): Promise<void> {
 	const force = args.flags.force;
 
 	if (!isGitRepo()) {
@@ -84,9 +85,9 @@ export async function run(args) {
 
 	logSuccess(`${label()} initialized`);
 	log(`Base branch: ${branch}`);
-	logInfo(`State: .ruah/state.json`);
-	logInfo(`Workflows: .ruah/workflows/`);
-	logInfo(`Worktrees: .ruah/worktrees/`);
+	logInfo("State: .ruah/state.json");
+	logInfo("Workflows: .ruah/workflows/");
+	logInfo("Worktrees: .ruah/worktrees/");
 
 	// Detect crag
 	const crag = detectCrag(root);

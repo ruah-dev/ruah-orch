@@ -1,4 +1,6 @@
 node_modules/
+dist/
+dist-test/
 .claude/settings.local.json
 .claude/.discovery-cache.json
 .claude/.session-state.json

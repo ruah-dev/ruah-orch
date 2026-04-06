@@ -1,3 +1,4 @@
+import type { ParsedArgs } from "../cli.js";
 import { executeTask } from "../core/executor.js";
 import {
 	createWorktree,
@@ -11,6 +12,7 @@ import {
 	readCragGovernance,
 	runGates,
 } from "../core/integrations.js";
+import type { Task } from "../core/state.js";
 import {
 	acquireLocks,
 	addHistoryEntry,
@@ -22,6 +24,7 @@ import {
 } from "../core/state.js";
 import {
 	formatLocks,
+	formatTask,
 	formatTaskList,
 	log,
 	logError,
@@ -30,7 +33,7 @@ import {
 	logWarn,
 } from "../utils/format.js";
 
-export async function run(args) {
+export async function run(args: ParsedArgs): Promise<void> {
 	const sub = args._[1];
 	if (!sub) {
 		logError(
@@ -62,20 +65,27 @@ export async function run(args) {
 	}
 }
 
-function taskCreate(args, root) {
+function taskCreate(args: ParsedArgs, root: string): void {
 	const name = args._[2];
 	if (!name) {
 		logError("Missing task name. Usage: ruah task create <name>");
 		process.exit(1);
 	}
 
-	const files = args.flags.files
-		? args.flags.files.split(",").map((f) => f.trim())
-		: [];
-	const baseBranch = args.flags.base;
-	const executor = args.flags.executor || null;
-	const prompt = args.flags.prompt || null;
-	const parentName = args.flags.parent || process.env.RUAH_PARENT_TASK || null;
+	const files =
+		typeof args.flags.files === "string"
+			? args.flags.files.split(",").map((f) => f.trim())
+			: [];
+	const baseBranch =
+		typeof args.flags.base === "string" ? args.flags.base : undefined;
+	const executor =
+		typeof args.flags.executor === "string" ? args.flags.executor : null;
+	const prompt =
+		typeof args.flags.prompt === "string" ? args.flags.prompt : null;
+	const parentName =
+		typeof args.flags.parent === "string"
+			? args.flags.parent
+			: process.env.RUAH_PARENT_TASK || null;
 
 	const state = loadState(root);
 
@@ -85,8 +95,8 @@ function taskCreate(args, root) {
 	}
 
 	// Resolve base branch: subtasks branch from parent's branch, not base
-	let base;
-	let parentTask = null;
+	let base: string;
+	let parentTask: Task | undefined;
 	if (parentName) {
 		parentTask = state.tasks[parentName];
 		if (!parentTask) {
@@ -132,7 +142,7 @@ function taskCreate(args, root) {
 	state.tasks[name] = {
 		name,
 		status: "created",
-		baseBranch: parentName ? parentTask.branch : base,
+		baseBranch: parentName && parentTask ? parentTask.branch : base,
 		branch: branchName,
 		worktree: worktreePath,
 		files,
@@ -172,7 +182,7 @@ function taskCreate(args, root) {
 	if (executor) logInfo(`Executor: ${executor}`);
 }
 
-async function taskStart(args, root) {
+async function taskStart(args: ParsedArgs, root: string): Promise<void> {
 	const name = args._[2];
 	if (!name) {
 		logError("Missing task name. Usage: ruah task start <name>");
@@ -203,7 +213,9 @@ async function taskStart(args, root) {
 	if (task.prompt && !noExec) {
 		log(`Executing with ${task.executor || "default"}...`);
 
-		const result = await executeTask(task, task.worktree, { dryRun });
+		const result = await executeTask(task, task.worktree, {
+			dryRun: !!dryRun,
+		});
 
 		if (dryRun) {
 			logInfo(`Would run: ${result.command}`);
@@ -234,7 +246,7 @@ async function taskStart(args, root) {
 	}
 }
 
-function taskDone(args, root) {
+function taskDone(args: ParsedArgs, root: string): void {
 	const name = args._[2];
 	if (!name) {
 		logError("Missing task name. Usage: ruah task done <name>");
@@ -269,7 +281,7 @@ function taskDone(args, root) {
 	logSuccess(`Task "${name}" marked as done`);
 }
 
-function taskMerge(args, root) {
+function taskMerge(args: ParsedArgs, root: string): void {
 	const name = args._[2];
 	if (!name) {
 		logError("Missing task name. Usage: ruah task merge <name>");
@@ -357,9 +369,9 @@ function taskMerge(args, root) {
 	}
 
 	// Merge — subtasks merge from within the parent's worktree
-	const mergeOpts = {};
+	const mergeOpts: { parentWorktree?: string } = {};
 	if (isSubtask) {
-		const parentTask = state.tasks[task.parent];
+		const parentTask = state.tasks[task.parent!];
 		if (parentTask?.worktree) {
 			mergeOpts.parentWorktree = parentTask.worktree;
 		}
@@ -395,7 +407,7 @@ function taskMerge(args, root) {
 	}
 }
 
-function taskList(args, root) {
+function taskList(args: ParsedArgs, root: string): void {
 	const state = loadState(root);
 	const json = args.flags.json;
 
@@ -406,7 +418,7 @@ function taskList(args, root) {
 
 	// Build tree: show root tasks, then indent children
 	const rootTasks = Object.values(state.tasks).filter((t) => !t.parent);
-	const childrenOf = (parentName) =>
+	const childrenOf = (parentName: string): Task[] =>
 		Object.values(state.tasks).filter((t) => t.parent === parentName);
 
 	log("Tasks:");
@@ -436,7 +448,7 @@ function taskList(args, root) {
 	}
 }
 
-function taskChildren(args, root) {
+function taskChildren(args: ParsedArgs, root: string): void {
 	const name = args._[2];
 	if (!name) {
 		logError("Missing task name. Usage: ruah task children <name>");
@@ -469,7 +481,7 @@ function taskChildren(args, root) {
 	}
 }
 
-function taskCancel(args, root) {
+function taskCancel(args: ParsedArgs, root: string): void {
 	const name = args._[2];
 	if (!name) {
 		logError("Missing task name. Usage: ruah task cancel <name>");

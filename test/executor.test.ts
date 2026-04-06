@@ -6,14 +6,14 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { executeTask, getAvailableExecutors } from "../src/core/executor.js";
 
-function tmpDir() {
+function tmpDir(): string {
 	const dir = join(tmpdir(), `ruah-exec-${randomBytes(4).toString("hex")}`);
 	mkdirSync(dir, { recursive: true });
 	return dir;
 }
 
 describe("executor", () => {
-	let dir;
+	let dir: string;
 	beforeEach(() => {
 		dir = tmpDir();
 	});
@@ -34,7 +34,7 @@ describe("executor", () => {
 		const result = await executeTask(task, dir, { dryRun: true });
 		assert.ok(result.success);
 		assert.ok(result.dryRun);
-		assert.ok(result.command.includes("echo"));
+		assert.ok(result.command?.includes("echo"));
 	});
 
 	it("executeTask writes .ruah-task.md", async () => {

@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   test:
-    name: Lint & Test
+    name: Typecheck, Lint & Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,15 +20,18 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
 
       - run: npm ci
 
+      - name: Typecheck
+        run: npx tsc --noEmit
+
       - name: Lint
-        run: npx @biomejs/biome check .
+        run: npx biome check .
 
       - name: Test
-        run: node --test test/*.test.js
+        run: npm test
 
   publish-npm:
     name: Publish to npm
@@ -40,10 +43,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
       - run: npm ci
+
+      - name: Build
+        run: npm run build
 
       - name: Publish
         run: npm publish --access public
@@ -72,7 +78,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ steps.version.outputs.tag }}"
-          VERSION="${{ steps.version.outputs.version }}"
 
           gh release create "$TAG" \
             --title "ruah $TAG" \

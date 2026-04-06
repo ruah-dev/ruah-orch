@@ -17,14 +17,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
       - run: npm ci
-      - name: "lint & format: npx @biomejs/biome check --write ."
-        run: |
-          npx @biomejs/biome check --write .
-      - name: "lint & format: npx @biomejs/biome check ."
-        run: |
-          npx @biomejs/biome check .
-      - name: "test: node --test test/*.test.js"
-        run: |
-          node --test test/*.test.js
+      - name: "typecheck"
+        run: npx tsc --noEmit
+      - name: "lint & format"
+        run: npx biome check .
+      - name: "test"
+        run: npm test

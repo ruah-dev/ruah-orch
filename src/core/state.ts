@@ -7,10 +7,55 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
+import type { TaskStatus } from "../utils/format.js";
+
+export interface Task {
+	name: string;
+	status: TaskStatus;
+	baseBranch: string;
+	branch: string;
+	worktree: string;
+	files: string[];
+	executor: string | null;
+	prompt: string | null;
+	parent: string | null;
+	children: string[];
+	repoRoot?: string;
+	createdAt: string;
+	startedAt: string | null;
+	completedAt: string | null;
+	mergedAt: string | null;
+}
+
+export interface HistoryEntry {
+	timestamp: string;
+	action: string;
+	[key: string]: unknown;
+}
+
+export interface RuahState {
+	version: number;
+	baseBranch: string;
+	tasks: Record<string, Task>;
+	locks: Record<string, string[]>;
+	history: HistoryEntry[];
+}
+
+export interface LockConflict {
+	task: string;
+	pattern: string;
+	requested: string;
+}
+
+export interface LockResult {
+	success: boolean;
+	conflicts: LockConflict[];
+	outOfScope?: boolean;
+}
 
 const MAX_HISTORY = 200;
 
-function defaultState() {
+function defaultState(): RuahState {
 	return {
 		version: 1,
 		baseBranch: "main",
@@ -20,7 +65,7 @@ function defaultState() {
 	};
 }
 
-export function ensureStateDir(root) {
+export function ensureStateDir(root: string): string {
 	const ruahDir = join(root, ".ruah");
 	mkdirSync(ruahDir, { recursive: true });
 	mkdirSync(join(ruahDir, "worktrees"), { recursive: true });
@@ -28,20 +73,20 @@ export function ensureStateDir(root) {
 	return ruahDir;
 }
 
-export function statePath(root) {
+export function statePath(root: string): string {
 	return join(root, ".ruah", "state.json");
 }
 
-export function loadState(root) {
+export function loadState(root: string): RuahState {
 	const file = statePath(root);
 	if (!existsSync(file)) {
 		return defaultState();
 	}
 	const raw = readFileSync(file, "utf-8");
-	return JSON.parse(raw);
+	return JSON.parse(raw) as RuahState;
 }
 
-export function saveState(root, state) {
+export function saveState(root: string, state: RuahState): void {
 	const file = statePath(root);
 	mkdirSync(dirname(file), { recursive: true });
 	const tmp = `${file}.${randomBytes(4).toString("hex")}.tmp`;
@@ -49,7 +94,11 @@ export function saveState(root, state) {
 	renameSync(tmp, file);
 }
 
-export function addHistoryEntry(state, action, details = {}) {
+export function addHistoryEntry(
+	state: RuahState,
+	action: string,
+	details: Record<string, unknown> = {},
+): void {
 	state.history.push({
 		timestamp: new Date().toISOString(),
 		action,
@@ -60,7 +109,12 @@ export function addHistoryEntry(state, action, details = {}) {
 	}
 }
 
-export function acquireLocks(state, taskName, filePatterns, parentName) {
+export function acquireLocks(
+	state: RuahState,
+	taskName: string,
+	filePatterns: string[],
+	parentName?: string | null,
+): LockResult {
 	if (!filePatterns || filePatterns.length === 0) {
 		return { success: true, conflicts: [] };
 	}
@@ -69,7 +123,7 @@ export function acquireLocks(state, taskName, filePatterns, parentName) {
 	if (parentName) {
 		const parentLocks = state.locks[parentName];
 		if (parentLocks && parentLocks.length > 0) {
-			const outOfScope = [];
+			const outOfScope: string[] = [];
 			for (const requested of filePatterns) {
 				const withinParent = parentLocks.some((pl) =>
 					patternsOverlap(pl, requested),
@@ -92,7 +146,7 @@ export function acquireLocks(state, taskName, filePatterns, parentName) {
 		}
 	}
 
-	const conflicts = [];
+	const conflicts: LockConflict[] = [];
 	for (const [owner, owned] of Object.entries(state.locks)) {
 		if (owner === taskName) continue;
 		// Subtasks of the same parent don't conflict with the parent itself
@@ -115,21 +169,24 @@ export function acquireLocks(state, taskName, filePatterns, parentName) {
 	return { success: true, conflicts: [] };
 }
 
-export function getChildren(state, parentName) {
+export function getChildren(state: RuahState, parentName: string): Task[] {
 	return Object.values(state.tasks).filter((t) => t.parent === parentName);
 }
 
-export function getUnmergedChildren(state, parentName) {
+export function getUnmergedChildren(
+	state: RuahState,
+	parentName: string,
+): Task[] {
 	return getChildren(state, parentName).filter(
 		(t) => t.status !== "merged" && t.status !== "cancelled",
 	);
 }
 
-export function getTaskLineage(state, taskName) {
-	const lineage = [];
-	let current = taskName;
+export function getTaskLineage(state: RuahState, taskName: string): string[] {
+	const lineage: string[] = [];
+	let current: string | null = taskName;
 	while (current) {
-		const task = state.tasks[current];
+		const task: Task | undefined = state.tasks[current];
 		if (!task) break;
 		lineage.unshift(current);
 		current = task.parent || null;
@@ -137,11 +194,11 @@ export function getTaskLineage(state, taskName) {
 	return lineage;
 }
 
-export function releaseLocks(state, taskName) {
+export function releaseLocks(state: RuahState, taskName: string): void {
 	delete state.locks[taskName];
 }
 
-export function patternsOverlap(a, b) {
+export function patternsOverlap(a: string, b: string): boolean {
 	if (a === b) return true;
 
 	const normA = a.replace(/\/+$/, "");
@@ -173,7 +230,7 @@ export function patternsOverlap(a, b) {
 	return normA.startsWith(`${normB}/`) || normB.startsWith(`${normA}/`);
 }
 
-function matchGlob(pattern, path) {
+function matchGlob(pattern: string, path: string): boolean {
 	// Handle ** (match any number of directories)
 	if (pattern.endsWith("/**")) {
 		const prefix = pattern.slice(0, -3);

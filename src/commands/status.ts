@@ -1,3 +1,4 @@
+import type { ParsedArgs } from "../cli.js";
 import { getCurrentBranch, getRepoRoot, listWorktrees } from "../core/git.js";
 import {
 	detectArhy,
@@ -14,7 +15,7 @@ import {
 	logSuccess,
 } from "../utils/format.js";
 
-export async function run(args) {
+export async function run(args: ParsedArgs): Promise<void> {
 	const root = getRepoRoot();
 	const json = args.flags.json;
 
@@ -50,7 +51,10 @@ export async function run(args) {
 					},
 					tasks: state.tasks,
 					locks: state.locks,
-					worktrees: worktrees.map((w) => ({ path: w.path, branch: w.branch })),
+					worktrees: worktrees.map((w) => ({
+						path: w.path,
+						branch: w.branch,
+					})),
 				},
 				null,
 				2,
@@ -93,7 +97,7 @@ export async function run(args) {
 	// Tasks
 	const total = tasks.length;
 	if (total > 0) {
-		const parts = [];
+		const parts: string[] = [];
 		if (active) parts.push(`${active} active`);
 		if (created) parts.push(`${created} created`);
 		if (done) parts.push(`${done} done`);

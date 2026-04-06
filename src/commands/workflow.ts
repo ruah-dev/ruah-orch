@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import type { ParsedArgs } from "../cli.js";
 import { executeTask } from "../core/executor.js";
 import {
 	createWorktree,
@@ -18,6 +19,7 @@ import {
 	releaseLocks,
 	saveState,
 } from "../core/state.js";
+import type { WorkflowTask } from "../core/workflow.js";
 import {
 	getExecutionPlan,
 	listWorkflows,
@@ -33,7 +35,7 @@ import {
 	logSuccess,
 } from "../utils/format.js";
 
-export async function run(args) {
+export async function run(args: ParsedArgs): Promise<void> {
 	const sub = args._[1];
 	if (!sub) {
 		logError("Missing subcommand. Usage: ruah workflow <run|plan|list>");
@@ -55,7 +57,19 @@ export async function run(args) {
 	}
 }
 
-async function workflowRun(args, root) {
+interface StageTask {
+	def: WorkflowTask;
+	worktreePath: string;
+}
+
+interface ExecResult {
+	name: string;
+	success: boolean;
+	exitCode?: number | null;
+	error?: string | null;
+}
+
+async function workflowRun(args: ParsedArgs, root: string): Promise<void> {
 	const file = args._[2];
 	if (!file) {
 		logError("Missing workflow file. Usage: ruah workflow run <file.md>");
@@ -109,14 +123,14 @@ async function workflowRun(args, root) {
 		logInfo("crag detected — gates will run after each stage");
 	}
 
-	const results = [];
+	const results: ExecResult[] = [];
 
 	for (let i = 0; i < plan.length; i++) {
 		const stage = plan[i];
 		log(`Stage ${i + 1}/${plan.length} — ${stage.length} task(s)`);
 
 		// Create worktrees and check locks
-		const stageTasks = [];
+		const stageTasks: StageTask[] = [];
 		for (const taskDef of stage) {
 			if (taskDef.files.length > 0) {
 				const lockResult = acquireLocks(state, taskDef.name, taskDef.files);
@@ -142,6 +156,8 @@ async function workflowRun(args, root) {
 				files: taskDef.files,
 				executor: taskDef.executor,
 				prompt: taskDef.prompt,
+				parent: null,
+				children: [],
 				createdAt: new Date().toISOString(),
 				startedAt: new Date().toISOString(),
 				completedAt: null,
@@ -154,28 +170,37 @@ async function workflowRun(args, root) {
 		}
 
 		// Execute tasks (parallel if configured and stage has multiple)
-		const execPromises = stageTasks.map(async ({ def, worktreePath }) => {
-			logInfo(`  Running: ${def.name} (${def.executor || "script"})`);
-			const result = await executeTask(def, worktreePath, { silent: true });
+		const execPromises = stageTasks.map(
+			async ({ def, worktreePath }): Promise<ExecResult> => {
+				logInfo(`  Running: ${def.name} (${def.executor || "script"})`);
+				const result = await executeTask(def, worktreePath, {
+					silent: true,
+				});
 
-			if (result.success) {
-				state.tasks[def.name].status = "done";
-				state.tasks[def.name].completedAt = new Date().toISOString();
-				addHistoryEntry(state, "task.done", { task: def.name });
-				logSuccess(`  ${def.name}: completed`);
-			} else {
-				state.tasks[def.name].status = "failed";
-				addHistoryEntry(state, "task.failed", { task: def.name });
-				logError(
-					`  ${def.name}: failed — ${result.error || `exit ${result.exitCode}`}`,
-				);
-			}
+				if (result.success) {
+					state.tasks[def.name].status = "done";
+					state.tasks[def.name].completedAt = new Date().toISOString();
+					addHistoryEntry(state, "task.done", { task: def.name });
+					logSuccess(`  ${def.name}: completed`);
+				} else {
+					state.tasks[def.name].status = "failed";
+					addHistoryEntry(state, "task.failed", { task: def.name });
+					logError(
+						`  ${def.name}: failed — ${result.error || `exit ${result.exitCode}`}`,
+					);
+				}
 
-			saveState(root, state);
-			return { name: def.name, ...result };
-		});
+				saveState(root, state);
+				return {
+					name: def.name,
+					success: result.success,
+					exitCode: result.exitCode,
+					error: result.error,
+				};
+			},
+		);
 
-		let execResults;
+		let execResults: ExecResult[];
 		if (workflow.config.parallel && stageTasks.length > 1) {
 			execResults = await Promise.all(execPromises);
 		} else {
@@ -245,7 +270,7 @@ async function workflowRun(args, root) {
 	}
 }
 
-function workflowPlan(args, _root) {
+function workflowPlan(args: ParsedArgs, _root: string): void {
 	const file = args._[2];
 	if (!file) {
 		logError("Missing workflow file. Usage: ruah workflow plan <file.md>");
@@ -300,7 +325,7 @@ function workflowPlan(args, _root) {
 	}
 }
 
-function workflowList(args, root) {
+function workflowList(args: ParsedArgs, root: string): void {
 	const dir = join(root, ".ruah", "workflows");
 	const workflows = listWorkflows(dir);
 	const json = args.flags.json;
