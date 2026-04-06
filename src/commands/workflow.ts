@@ -271,6 +271,17 @@ async function workflowRun(args: ParsedArgs, root: string): Promise<void> {
 			const failures = execResults.filter((r) => !r.success);
 			if (failures.length > 0) {
 				logError(`Stage ${i + 1} failed. Halting workflow.`);
+				// Clean up tasks from this stage that won't be merged
+				for (const { def } of stageTasks) {
+					const task = state.tasks[def.name];
+					if (task && task.status !== "merged") {
+						removeWorktree(def.name, root);
+						releaseLocks(state, def.name);
+						task.status = "cancelled";
+						logWarn(`  Cleaned up: ${def.name}`);
+					}
+				}
+				saveState(root, state);
 				results.push(...execResults);
 				break;
 			}
