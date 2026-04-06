@@ -116,6 +116,21 @@ Built-in adapters for common AI coding agents:
 
 Unknown executor names are treated as raw shell commands.
 
+> **Note: Running from inside an AI session**
+>
+> The `claude-code` executor spawns a nested CLI process (`claude -p ...`), which doesn't work well from inside an existing Claude Code session — changes can be lost. When using ruah from within a CC session, use it for **planning + file lock validation** and your session's Agent tool for actual execution:
+>
+> ```bash
+> # Inside a CC session — use ruah for orchestration only
+> ruah task create auth --files "src/auth/**" --no-exec
+> ruah task start auth --no-exec    # creates worktree, doesn't spawn executor
+> # ... use Agent tool to implement in the worktree ...
+> ruah task done auth
+> ruah task merge auth
+> ```
+>
+> When running ruah from a **terminal directly**, the full executor lifecycle works as designed.
+
 ### Subagent Spawning
 
 Any agent running inside a task can spawn subtasks. Subtasks get their own worktrees, branched from the parent's branch — not from base.
