@@ -245,9 +245,12 @@ arhy   = system contracts                               (@levi-tc/arhy)
 - TypeScript (dev only — ships compiled JS)
 - Zero runtime npm dependencies
 
-## Changelog
+## Community
 
-See [CHANGELOG.md](CHANGELOG.md) for release history.
+- [Contributing](CONTRIBUTING.md) — how to set up, develop, and submit PRs
+- [Code of Conduct](CODE_OF_CONDUCT.md) — our standards for participation
+- [Security](SECURITY.md) — how to report vulnerabilities
+- [Changelog](CHANGELOG.md) — release history
 
 ## License
 
