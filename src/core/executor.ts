@@ -175,7 +175,10 @@ const ADAPTERS: Record<
 	}),
 	raw: (prompt) => ({
 		command: process.platform === "win32" ? "cmd" : "sh",
-		args: process.platform === "win32" ? ["/d", "/s", "/c", prompt] : ["-lc", prompt],
+		args:
+			process.platform === "win32"
+				? ["/d", "/s", "/c", prompt]
+				: ["-c", prompt],
 		shell: false,
 	}),
 	script: (prompt) => {

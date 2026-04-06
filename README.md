@@ -18,10 +18,6 @@ Zero runtime dependencies. Works with Claude Code, Aider, Codex, Cursor, Windsur
 npx @levi-tc/ruah demo
 ```
 
-<p align="center">
-  <img src=".github/demo.gif" alt="ruah demo" width="100%" />
-</p>
-
 Creates a temp repo, shows worktree isolation, file locking, conflict detection, and DAG scheduling — then cleans up. Takes 3 seconds.
 
 ## Use It
@@ -139,9 +135,10 @@ When a workflow stops on a failed task:
 ```bash
 ruah workflow explain .ruah/workflows/feature.md
 ruah task takeover backend --executor codex
+ruah workflow resume .ruah/workflows/feature.md
 ```
 
-`workflow explain` shows the blocking task and the exact next command to run.
+`workflow explain` shows the blocking task and the exact takeover and resume commands to run.
 
 ### 4. Subagent Spawning
 
@@ -168,6 +165,7 @@ Built-in support for common AI agents.
 | `codex` | OpenAI Codex CLI |
 | `open-code` | OpenCode |
 | `script` | Any shell command |
+| `raw` | Explicit shell execution via `sh -lc` / `cmd /c` |
 
 ### 6. Governance (crag)
 
@@ -209,12 +207,15 @@ ruah task cancel <name>
 ruah task retry <name> [--no-exec] [--dry-run]
 
 ruah workflow run <file.md> [--dry-run] [--json]
+ruah workflow resume <name|file>
+ruah workflow explain <name|file>
 ruah workflow plan <file.md> [--json]
 ruah workflow list [--json]
 ruah workflow create <name> [--force]
 
 ruah status [--json]
 ruah config
+ruah doctor [--json]
 ruah clean [--dry-run] [--force]
 ```
 
