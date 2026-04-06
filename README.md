@@ -18,6 +18,10 @@ Zero runtime dependencies. Works with Claude Code, Aider, Codex, Cursor, Windsur
 npx @levi-tc/ruah demo
 ```
 
+<p align="center">
+  <img src=".github/demo.gif" alt="ruah demo" width="100%" />
+</p>
+
 Creates a temp repo, shows worktree isolation, file locking, conflict detection, and DAG scheduling — then cleans up. Takes 3 seconds.
 
 ## Use It
