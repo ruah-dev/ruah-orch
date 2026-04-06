@@ -205,3 +205,84 @@ export function hasUncommittedChanges(cwd?: string): boolean {
 	const status = git("status --porcelain", { cwd, silent: true });
 	return status.length > 0;
 }
+
+export interface ConflictCheck {
+	/** Whether the merge would be clean */
+	clean: boolean;
+	/** List of files with conflicts (empty if clean) */
+	conflictFiles: string[];
+}
+
+/**
+ * Check if merging branchB into branchA would cause conflicts.
+ * Uses git merge-tree (read-only — does not modify the repo).
+ */
+export function checkMergeConflicts(
+	branchA: string,
+	branchB: string,
+	repoRoot: string,
+): ConflictCheck {
+	// Find the merge base
+	const base = git(`merge-base ${branchA} ${branchB}`, {
+		cwd: repoRoot,
+		silent: true,
+		ignoreError: true,
+	});
+
+	if (!base) {
+		// No common ancestor — can't check
+		return { clean: true, conflictFiles: [] };
+	}
+
+	try {
+		// git merge-tree exits 0 if clean, non-zero if conflicts
+		// The --write-tree form (git 2.38+) is best, but fallback to classic
+		const result = git(`merge-tree ${base} ${branchA} ${branchB}`, {
+			cwd: repoRoot,
+			silent: true,
+		});
+
+		// Classic merge-tree outputs conflict markers — if output contains
+		// "changed in both" or conflict markers, there are conflicts
+		const conflictFiles: string[] = [];
+		for (const line of result.split("\n")) {
+			// Classic merge-tree format: each conflict section starts with
+			// a line like "changed in both" followed by file info
+			const match = line.match(/^\+\+\+\s+(.+)$/);
+			if (match) {
+				conflictFiles.push(match[1]);
+			}
+		}
+
+		// If merge-tree produced output with conflict markers, it's not clean
+		const hasConflicts =
+			result.includes("changed in both") || result.includes("+<<<<<<< ");
+
+		return {
+			clean: !hasConflicts,
+			conflictFiles,
+		};
+	} catch {
+		// merge-tree failed — try the write-tree variant (git 2.38+)
+		try {
+			git(`merge-tree --write-tree ${branchA} ${branchB}`, {
+				cwd: repoRoot,
+				silent: true,
+			});
+			// If it succeeds, merge is clean
+			return { clean: true, conflictFiles: [] };
+		} catch (err: unknown) {
+			// Parse error output for conflict files
+			const stderr = (err as { stderr?: string })?.stderr || "";
+			const files: string[] = [];
+			for (const line of stderr.split("\n")) {
+				const m = line.match(/^CONFLICT\s+\([^)]+\):\s+(.+)/);
+				if (m) files.push(m[1].trim());
+			}
+			return {
+				clean: false,
+				conflictFiles: files,
+			};
+		}
+	}
+}

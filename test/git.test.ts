@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import {
 	branchExists,
+	checkMergeConflicts,
 	createWorktree,
 	getCurrentBranch,
 	getRepoRoot,
@@ -102,5 +103,83 @@ describe("git", () => {
 		const wts = listWorktrees(repo);
 		assert.ok(wts.length >= 1);
 		assert.ok(wts.some((w) => w.branch?.includes("ruah/wt-test")));
+	});
+
+	describe("checkMergeConflicts", () => {
+		it("returns clean for non-conflicting branches", () => {
+			const mainBranch = getCurrentBranch(repo);
+
+			// Create branch-a that edits file-a.txt
+			execSync("git checkout -b branch-a", { cwd: repo, stdio: "pipe" });
+			writeFileSync(join(repo, "file-a.txt"), "content from branch A", "utf-8");
+			execSync('git add . && git commit -m "add file-a"', {
+				cwd: repo,
+				stdio: "pipe",
+			});
+
+			// Create branch-b from main that edits file-b.txt
+			execSync(`git checkout ${mainBranch}`, { cwd: repo, stdio: "pipe" });
+			execSync("git checkout -b branch-b", { cwd: repo, stdio: "pipe" });
+			writeFileSync(join(repo, "file-b.txt"), "content from branch B", "utf-8");
+			execSync('git add . && git commit -m "add file-b"', {
+				cwd: repo,
+				stdio: "pipe",
+			});
+
+			const result = checkMergeConflicts("branch-a", "branch-b", repo);
+			assert.equal(result.clean, true);
+			assert.deepEqual(result.conflictFiles, []);
+
+			// Restore main branch
+			execSync(`git checkout ${mainBranch}`, { cwd: repo, stdio: "pipe" });
+		});
+
+		it("detects conflicts when branches edit same file", () => {
+			const mainBranch = getCurrentBranch(repo);
+
+			// Create branch-a that edits README.md
+			execSync("git checkout -b conflict-a", { cwd: repo, stdio: "pipe" });
+			writeFileSync(join(repo, "README.md"), "version A content", "utf-8");
+			execSync('git add . && git commit -m "edit readme on A"', {
+				cwd: repo,
+				stdio: "pipe",
+			});
+
+			// Create branch-b from main that also edits README.md differently
+			execSync(`git checkout ${mainBranch}`, { cwd: repo, stdio: "pipe" });
+			execSync("git checkout -b conflict-b", { cwd: repo, stdio: "pipe" });
+			writeFileSync(join(repo, "README.md"), "version B content", "utf-8");
+			execSync('git add . && git commit -m "edit readme on B"', {
+				cwd: repo,
+				stdio: "pipe",
+			});
+
+			const result = checkMergeConflicts("conflict-a", "conflict-b", repo);
+			assert.equal(result.clean, false);
+
+			// Restore main branch
+			execSync(`git checkout ${mainBranch}`, { cwd: repo, stdio: "pipe" });
+		});
+
+		it("handles missing merge base gracefully", () => {
+			// Create an orphan branch with no common ancestor
+			execSync("git checkout --orphan orphan-branch", {
+				cwd: repo,
+				stdio: "pipe",
+			});
+			writeFileSync(join(repo, "orphan.txt"), "orphan content", "utf-8");
+			execSync('git add . && git commit -m "orphan init"', {
+				cwd: repo,
+				stdio: "pipe",
+			});
+
+			const mainBranch = "main";
+			const result = checkMergeConflicts(mainBranch, "orphan-branch", repo);
+			// No common ancestor — should return clean: true
+			assert.equal(result.clean, true);
+			assert.deepEqual(result.conflictFiles, []);
+
+			execSync(`git checkout ${mainBranch}`, { cwd: repo, stdio: "pipe" });
+		});
 	});
 });
