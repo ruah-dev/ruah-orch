@@ -26,6 +26,7 @@ describe("executor", () => {
 		assert.ok(executors.includes("claude-code"));
 		assert.ok(executors.includes("aider"));
 		assert.ok(executors.includes("codex"));
+		assert.ok(executors.includes("codex-mcp"));
 		assert.ok(executors.includes("script"));
 	});
 
@@ -65,6 +66,37 @@ describe("executor", () => {
 		const task = { name: "test", executor: "echo", prompt: "hello" };
 		const result = await executeTask(task, dir, { silent: true });
 		assert.ok(result.success);
+	});
+
+	it("codex-mcp adapter falls back to codex CLI when no MCP URL", async () => {
+		const original = process.env.CODEX_MCP_URL;
+		delete process.env.CODEX_MCP_URL;
+
+		const result = await executeTask(
+			{ name: "test", executor: "codex-mcp", prompt: "hello" },
+			dir,
+			{ dryRun: true },
+		);
+		assert.ok(result.success);
+		assert.ok(result.dryRun);
+		assert.ok(result.command?.startsWith("codex"));
+
+		if (original) process.env.CODEX_MCP_URL = original;
+	});
+
+	it("codex-mcp adapter uses MCP when URL is configured", async () => {
+		process.env.CODEX_MCP_URL = "http://localhost:3100";
+
+		const result = await executeTask(
+			{ name: "test", executor: "codex-mcp", prompt: "hello" },
+			dir,
+			{ dryRun: true },
+		);
+		assert.ok(result.success);
+		assert.ok(result.dryRun);
+		assert.ok(result.command?.startsWith("node"));
+
+		delete process.env.CODEX_MCP_URL;
 	});
 
 	it("executeTask writes contract to .ruah-task.md when provided", async () => {
