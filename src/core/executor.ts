@@ -34,6 +34,42 @@ export interface ExecuteResult {
 	dryRun?: boolean;
 }
 
+function generateMcpScript(prompt: string, mcpUrl: string): string {
+	// Use JSON.stringify to safely embed the prompt and URL — no shell injection
+	return `
+import { request } from "node:http";
+const mcpUrl = new URL(${JSON.stringify(mcpUrl)});
+const prompt = ${JSON.stringify(prompt)};
+const payload = JSON.stringify({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "tools/call",
+    params: { name: "execute", arguments: { prompt, workdir: process.cwd() } }
+});
+const req = request({
+    hostname: mcpUrl.hostname,
+    port: mcpUrl.port,
+    path: mcpUrl.pathname,
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
+    timeout: 300000
+}, (res) => {
+    let body = "";
+    res.on("data", (c) => { body += c; });
+    res.on("end", () => {
+        try {
+            const r = JSON.parse(body);
+            if (r.error) { console.error("MCP error:", r.error.message); process.exit(1); }
+            console.log(JSON.stringify(r.result, null, 2));
+        } catch { console.error("Invalid MCP response"); process.exit(1); }
+    });
+});
+req.on("error", (e) => { console.error("MCP connection failed:", e.message); process.exit(1); });
+req.write(payload);
+req.end();
+`;
+}
+
 const ADAPTERS: Record<string, (prompt: string) => AdapterResult> = {
 	"claude-code": (prompt) => ({
 		command: "claude",
@@ -47,6 +83,23 @@ const ADAPTERS: Record<string, (prompt: string) => AdapterResult> = {
 		command: "codex",
 		args: [prompt],
 	}),
+	"codex-mcp": (prompt) => {
+		if (process.env.CODEX_MCP_URL) {
+			return {
+				command: "node",
+				args: [
+					"--input-type=module",
+					"-e",
+					generateMcpScript(prompt, process.env.CODEX_MCP_URL),
+				],
+			};
+		}
+		// Fallback: regular codex CLI when MCP server is not configured
+		return {
+			command: "codex",
+			args: [prompt],
+		};
+	},
 	"open-code": (prompt) => ({
 		command: "opencode",
 		args: ["-p", prompt],
@@ -118,7 +171,7 @@ ruah task done <name>
 ruah task merge <name>   # merges into YOUR branch, not base
 \`\`\`
 
-Available executors: claude-code, aider, codex, open-code, script
+Available executors: claude-code, aider, codex, codex-mcp, open-code, script
 
 Environment variables available:
 - RUAH_TASK=${taskDef.name}
