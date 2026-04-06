@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { autoCommitChanges } from "./git.js";
 import type { FileContract } from "./planner.js";
 import { renderContractMarkdown } from "./planner.js";
 
@@ -70,10 +71,30 @@ req.end();
 `;
 }
 
-const ADAPTERS: Record<string, (prompt: string) => AdapterResult> = {
-	"claude-code": (prompt) => ({
+/**
+ * Wrap a user prompt with instructions that ensure the agent commits its work.
+ * This is critical when running from within another CC session — without an
+ * explicit commit, changes are lost when the worktree is cleaned up.
+ */
+function wrapPromptForCommit(prompt: string, taskName: string): string {
+	return `${prompt}
+
+IMPORTANT: When you are finished, you MUST commit all changes before exiting.
+Run: git add -A && git commit -m "ruah(${taskName}): completed task"
+Do NOT leave uncommitted changes — they will be lost.`;
+}
+
+const ADAPTERS: Record<
+	string,
+	(prompt: string, taskName?: string) => AdapterResult
+> = {
+	"claude-code": (prompt, taskName) => ({
 		command: "claude",
-		args: ["-p", prompt, "--dangerously-skip-permissions"],
+		args: [
+			"-p",
+			wrapPromptForCommit(prompt, taskName || "task"),
+			"--dangerously-skip-permissions",
+		],
 	}),
 	aider: (prompt) => ({
 		command: "aider",
@@ -132,7 +153,7 @@ export function executeTask(
 	let args: string[];
 
 	if (adapter) {
-		const resolved = adapter(prompt);
+		const resolved = adapter(prompt, taskDef.name);
 		cmd = resolved.command;
 		args = resolved.args;
 	} else {
@@ -235,6 +256,13 @@ Environment variables available:
 		}
 
 		child.on("error", (err) => {
+			// Try to salvage any work done before the error
+			try {
+				autoCommitChanges(taskDef.name, worktreePath);
+			} catch {
+				// Non-fatal
+			}
+
 			resolve({
 				success: false,
 				exitCode: null,
@@ -245,6 +273,17 @@ Environment variables available:
 		});
 
 		child.on("close", (code) => {
+			// Safety net: auto-commit any uncommitted changes left by the executor.
+			// This prevents lost work when agents forget to commit or crash mid-task.
+			try {
+				const autoCommitted = autoCommitChanges(taskDef.name, worktreePath);
+				if (autoCommitted) {
+					stderr += "\n[ruah] Auto-committed uncommitted changes\n";
+				}
+			} catch {
+				// Non-fatal — best effort
+			}
+
 			resolve({
 				success: code === 0,
 				exitCode: code,

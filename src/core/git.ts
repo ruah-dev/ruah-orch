@@ -206,6 +206,26 @@ export function hasUncommittedChanges(cwd?: string): boolean {
 	return status.length > 0;
 }
 
+/**
+ * Auto-commit all uncommitted changes in the given directory.
+ * Stages everything, commits with a ruah message. Returns true if a commit was made.
+ */
+export function autoCommitChanges(taskName: string, cwd: string): boolean {
+	if (!hasUncommittedChanges(cwd)) return false;
+
+	git("add -A", { cwd, silent: true });
+
+	// Check if there's actually anything staged (add -A may not stage anything new)
+	const staged = git("diff --cached --stat", { cwd, silent: true });
+	if (!staged) return false;
+
+	git(`commit -m "ruah: auto-commit changes from task ${taskName}"`, {
+		cwd,
+		silent: true,
+	});
+	return true;
+}
+
 export interface ConflictCheck {
 	/** Whether the merge would be clean */
 	clean: boolean;
