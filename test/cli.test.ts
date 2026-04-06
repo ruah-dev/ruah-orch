@@ -15,9 +15,11 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const CLI = join(__dirname, "..", "src", "cli.js");
-const PACKAGE_VERSION = JSON.parse(
-	readFileSync(join(__dirname, "..", "package.json"), "utf-8"),
-).version as string;
+const PACKAGE_JSON = existsSync(join(__dirname, "..", "package.json"))
+	? join(__dirname, "..", "package.json")
+	: join(__dirname, "..", "..", "package.json");
+const PACKAGE_VERSION = JSON.parse(readFileSync(PACKAGE_JSON, "utf-8"))
+	.version as string;
 
 function ruah(args: string, cwd: string): string {
 	try {
