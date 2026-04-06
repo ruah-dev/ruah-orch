@@ -18,6 +18,7 @@ Usage:
   ruah task <subcommand> [options]
   ruah workflow <subcommand> [options]
   ruah setup [--force]
+  ruah clean [--dry-run] [--force]  Clean stale tasks and orphaned locks
   ruah config            Show resolved configuration
   ruah status [--json]
 
@@ -134,6 +135,11 @@ async function main(): Promise<void> {
 			}
 			case "workflow": {
 				const { run } = await import("./commands/workflow.js");
+				await run(args);
+				break;
+			}
+			case "clean": {
+				const { run } = await import("./commands/clean.js");
 				await run(args);
 				break;
 			}
