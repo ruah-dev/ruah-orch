@@ -8,7 +8,7 @@ export interface ParsedArgs {
 	flags: Record<string, string | boolean>;
 }
 
-const VERSION = "0.3.2";
+const VERSION = "0.3.3";
 
 const HELP = `
 ${label()} — multi-agent orchestration

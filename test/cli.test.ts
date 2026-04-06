@@ -44,6 +44,23 @@ function tmpGitRepo(): string {
 	return dir;
 }
 
+async function waitForTask(
+	statePath: string,
+	taskName: string,
+	timeoutMs = 1000,
+): Promise<Record<string, unknown> | undefined> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		const state = JSON.parse(readFileSync(statePath, "utf-8"));
+		if (state.tasks[taskName]) {
+			return state.tasks[taskName];
+		}
+		await new Promise((resolve) => setTimeout(resolve, 25));
+	}
+	const state = JSON.parse(readFileSync(statePath, "utf-8"));
+	return state.tasks[taskName];
+}
+
 describe("CLI integration", () => {
 	let repo: string;
 
@@ -66,7 +83,7 @@ describe("CLI integration", () => {
 
 	it("--version prints version", () => {
 		const out = ruah("--version", repo);
-		assert.ok(out.includes("ruah 0.3.2"));
+		assert.ok(out.includes("ruah 0.3.3"));
 	});
 
 	it("init creates .ruah directory structure", () => {
@@ -355,7 +372,7 @@ describe("CLI integration", () => {
 		);
 	});
 
-	it("workflow run persists workflow metadata for later takeover", () => {
+	it("workflow run persists workflow metadata for later takeover", async () => {
 		ruah("init", repo);
 		const workflowPath = join(repo, ".ruah", "workflows", "handoff.md");
 		writeFileSync(
@@ -379,11 +396,11 @@ describe("CLI integration", () => {
 
 		ruah(`workflow run ${workflowPath}`, repo);
 
-		const state = JSON.parse(
-			readFileSync(join(repo, ".ruah", "state.json"), "utf-8"),
-		);
-		assert.equal(state.tasks.recoverable.status, "failed");
-		assert.deepEqual(state.tasks.recoverable.workflow, {
+		const statePath = join(repo, ".ruah", "state.json");
+		const recoverable = await waitForTask(statePath, "recoverable");
+		assert.ok(recoverable);
+		assert.equal(recoverable.status, "failed");
+		assert.deepEqual(recoverable.workflow, {
 			name: "Handoff Test",
 			path: workflowPath,
 			stage: 1,
