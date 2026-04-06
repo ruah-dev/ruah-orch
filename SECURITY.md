@@ -12,7 +12,7 @@ If you discover a security vulnerability in ruah, please report it responsibly.
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
-Instead, please email **phuzum23@gmail.com** with:
+Instead, please email **peter.whzm@gmail.com* with:
 
 - A description of the vulnerability
 - Steps to reproduce it
