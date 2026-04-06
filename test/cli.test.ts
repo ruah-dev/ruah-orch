@@ -158,6 +158,48 @@ describe("CLI integration", () => {
 		assert.equal(state.tasks.lifecycle.status, "merged");
 	});
 
+	it("status auto-reconciles tasks merged outside ruah", () => {
+		ruah("init", repo);
+		ruah('task create external-merge --files "README.md"', repo);
+		ruah("task start external-merge --no-exec", repo);
+
+		const statePath = join(repo, ".ruah", "state.json");
+		const before = JSON.parse(readFileSync(statePath, "utf-8"));
+		const task = before.tasks["external-merge"];
+
+		writeFileSync(
+			join(task.worktree, "README.md"),
+			"changed externally",
+			"utf-8",
+		);
+		execSync('git add README.md && git commit -m "external change"', {
+			cwd: task.worktree,
+			stdio: "pipe",
+		});
+		execSync(`git checkout ${before.baseBranch}`, { cwd: repo, stdio: "pipe" });
+		execSync(
+			`git merge ${task.branch} --no-ff -m "manual merge outside ruah"`,
+			{
+				cwd: repo,
+				stdio: "pipe",
+			},
+		);
+
+		const out = ruah("status --json", repo);
+		const parsed = JSON.parse(out);
+
+		assert.equal(parsed.tasks["external-merge"].status, "merged");
+		assert.ok(
+			!parsed.worktrees.some((w: { branch?: string }) =>
+				w.branch?.includes("ruah/external-merge"),
+			),
+		);
+
+		const after = JSON.parse(readFileSync(statePath, "utf-8"));
+		assert.equal(after.tasks["external-merge"].status, "merged");
+		assert.equal(after.locks["external-merge"], undefined);
+	});
+
 	it("subtask create branches from parent", () => {
 		ruah("init", repo);
 		ruah('task create parent-task --files "src/**"', repo);

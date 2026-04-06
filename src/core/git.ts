@@ -74,6 +74,22 @@ export function branchExists(name: string, cwd?: string): boolean {
 	}
 }
 
+export function isBranchMerged(
+	sourceBranch: string,
+	targetBranch: string,
+	repoRoot: string,
+): boolean {
+	try {
+		execSync(`git merge-base --is-ancestor ${sourceBranch} ${targetBranch}`, {
+			cwd: repoRoot,
+			stdio: "pipe",
+		});
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 export function sanitizeName(name: string): string {
 	return name.replace(/[^a-zA-Z0-9._-]/g, "_");
 }

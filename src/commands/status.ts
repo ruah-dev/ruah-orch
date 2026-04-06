@@ -5,6 +5,7 @@ import {
 	detectCrag,
 	readCragGovernance,
 } from "../core/integrations.js";
+import { reconcileStateWithGit } from "../core/reconcile.js";
 import { loadState } from "../core/state.js";
 import {
 	formatLocks,
@@ -20,6 +21,7 @@ export async function run(args: ParsedArgs): Promise<void> {
 	const json = args.flags.json;
 
 	const state = loadState(root);
+	const reconciliation = reconcileStateWithGit(root, state);
 	const branch = getCurrentBranch();
 	const worktrees = listWorktrees(root);
 	const crag = detectCrag(root);
@@ -106,6 +108,12 @@ export async function run(args: ParsedArgs): Promise<void> {
 		log(`Tasks: ${total} total (${parts.join(", ")})`);
 	} else {
 		log("Tasks: none");
+	}
+
+	if (reconciliation.merged.length > 0) {
+		logInfo(
+			`Auto-reconciled merged task(s): ${reconciliation.merged.join(", ")}`,
+		);
 	}
 
 	console.log("");
