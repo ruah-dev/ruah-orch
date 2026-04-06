@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
@@ -65,5 +65,27 @@ describe("executor", () => {
 		const task = { name: "test", executor: "echo", prompt: "hello" };
 		const result = await executeTask(task, dir, { silent: true });
 		assert.ok(result.success);
+	});
+
+	it("executeTask writes contract to .ruah-task.md when provided", async () => {
+		const task = {
+			name: "contract-task",
+			executor: "script",
+			prompt: "echo hello",
+			contract: {
+				taskName: "contract-task",
+				owned: ["src/foo.ts"],
+				sharedAppend: ["src/index.ts"],
+				readOnly: ["src/utils.ts"],
+			},
+		};
+		await executeTask(task, dir, { dryRun: true });
+		const content = readFileSync(join(dir, ".ruah-task.md"), "utf-8");
+		assert.ok(content.includes("Modification Contract"));
+		assert.ok(content.includes("src/foo.ts"));
+		assert.ok(content.includes("src/index.ts"));
+		assert.ok(content.includes("src/utils.ts"));
+		assert.ok(content.includes("Owned Files"));
+		assert.ok(content.includes("Read-Only Files"));
 	});
 });

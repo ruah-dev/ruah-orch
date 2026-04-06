@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
+import type { FileContract } from "./planner.js";
+import { renderContractMarkdown } from "./planner.js";
 
 interface AdapterResult {
 	command: string;
@@ -14,6 +16,7 @@ export interface TaskDef {
 	parent?: string | null;
 	files?: string[];
 	repoRoot?: string;
+	contract?: FileContract | null;
 }
 
 export interface ExecuteOptions {
@@ -95,6 +98,9 @@ export function executeTask(
 		taskDef.files && taskDef.files.length > 0
 			? `\n## File Scope\n- Locked files: ${taskDef.files.join(", ")}\n`
 			: "";
+	const contractInfo = taskDef.contract
+		? `\n${renderContractMarkdown(taskDef.contract)}\n`
+		: "";
 	const subagentGuide = `
 ## Spawning Subtasks
 
@@ -121,7 +127,7 @@ Environment variables available:
 `;
 	writeFileSync(
 		taskFile,
-		`# Task: ${taskDef.name}\n\n${prompt}\n${parentInfo}${filesInfo}${subagentGuide}`,
+		`# Task: ${taskDef.name}\n\n${prompt}\n${parentInfo}${filesInfo}${contractInfo}${subagentGuide}`,
 		"utf-8",
 	);
 
