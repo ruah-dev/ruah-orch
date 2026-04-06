@@ -155,7 +155,8 @@ describe("CLI integration", () => {
 		const state = JSON.parse(
 			readFileSync(join(repo, ".ruah", "state.json"), "utf-8"),
 		);
-		assert.equal(state.tasks.lifecycle.status, "merged");
+		assert.equal(state.tasks.lifecycle, undefined);
+		assert.ok(!state.locks.lifecycle);
 	});
 
 	it("status auto-reconciles tasks merged outside ruah", () => {
@@ -188,7 +189,7 @@ describe("CLI integration", () => {
 		const out = ruah("status --json", repo);
 		const parsed = JSON.parse(out);
 
-		assert.equal(parsed.tasks["external-merge"].status, "merged");
+		assert.equal(parsed.tasks["external-merge"], undefined);
 		assert.ok(
 			!parsed.worktrees.some((w: { branch?: string }) =>
 				w.branch?.includes("ruah/external-merge"),
@@ -196,8 +197,41 @@ describe("CLI integration", () => {
 		);
 
 		const after = JSON.parse(readFileSync(statePath, "utf-8"));
-		assert.equal(after.tasks["external-merge"].status, "merged");
+		assert.equal(after.tasks["external-merge"], undefined);
 		assert.equal(after.locks["external-merge"], undefined);
+	});
+
+	it("status prunes merged tasks already persisted in state", () => {
+		ruah("init", repo);
+		ruah('task create old-merged --files "README.md"', repo);
+
+		const statePath = join(repo, ".ruah", "state.json");
+		const state = JSON.parse(readFileSync(statePath, "utf-8"));
+		state.tasks["old-merged"].status = "merged";
+		state.tasks["old-merged"].mergedAt = new Date().toISOString();
+		writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`, "utf-8");
+
+		const out = ruah("status --json", repo);
+		const parsed = JSON.parse(out);
+
+		assert.equal(parsed.tasks["old-merged"], undefined);
+		const after = JSON.parse(readFileSync(statePath, "utf-8"));
+		assert.equal(after.tasks["old-merged"], undefined);
+	});
+
+	it("status prunes cancelled tasks whose worktrees are no longer used", () => {
+		ruah("init", repo);
+		ruah('task create old-cancelled --files "README.md"', repo);
+		ruah("task cancel old-cancelled", repo);
+
+		const out = ruah("status --json", repo);
+		const parsed = JSON.parse(out);
+
+		assert.equal(parsed.tasks["old-cancelled"], undefined);
+
+		const statePath = join(repo, ".ruah", "state.json");
+		const after = JSON.parse(readFileSync(statePath, "utf-8"));
+		assert.equal(after.tasks["old-cancelled"], undefined);
 	});
 
 	it("subtask create branches from parent", () => {
@@ -338,17 +372,17 @@ describe("CLI integration", () => {
 - files: README.md
 - executor: script
 - depends: []
-- prompt: echo workflow-task
+- prompt: false
 `,
 			"utf-8",
 		);
 
-		const out = ruah(`workflow run ${workflowPath}`, repo);
-		assert.ok(out.includes('Workflow "Handoff Test" complete'));
+		ruah(`workflow run ${workflowPath}`, repo);
 
 		const state = JSON.parse(
 			readFileSync(join(repo, ".ruah", "state.json"), "utf-8"),
 		);
+		assert.equal(state.tasks.recoverable.status, "failed");
 		assert.deepEqual(state.tasks.recoverable.workflow, {
 			name: "Handoff Test",
 			path: workflowPath,

@@ -22,6 +22,7 @@ import {
 	addHistoryEntry,
 	loadState,
 	releaseLocks,
+	removeTask,
 	saveState,
 } from "../core/state.js";
 import type { WorkflowTask } from "../core/workflow.js";
@@ -278,10 +279,20 @@ async function workflowRun(args: ParsedArgs, root: string): Promise<void> {
 			const failures = execResults.filter((r) => !r.success);
 			if (failures.length > 0) {
 				logError(`Stage ${i + 1} failed. Halting workflow.`);
+				const failedTaskNames = new Set(
+					failures.map((failure) => failure.name),
+				);
 				// Clean up tasks from this stage that won't be merged
 				for (const { def } of stageTasks) {
 					const task = state.tasks[def.name];
-					if (task && task.status !== "merged") {
+					if (!task || task.status === "merged") {
+						continue;
+					}
+					if (failedTaskNames.has(def.name)) {
+						logWarn(`  Preserved failed task for takeover: ${def.name}`);
+						continue;
+					}
+					if (task) {
 						removeWorktree(def.name, root);
 						releaseLocks(state, def.name);
 						task.status = "cancelled";
@@ -309,11 +320,14 @@ async function workflowRun(args: ParsedArgs, root: string): Promise<void> {
 			for (const { def } of stageTasks) {
 				const mergeResult = mergeWorktree(def.name, baseBranch, root);
 				if (mergeResult.success) {
-					state.tasks[def.name].status = "merged";
-					state.tasks[def.name].mergedAt = new Date().toISOString();
-					releaseLocks(state, def.name);
+					const mergedAt = new Date().toISOString();
+					addHistoryEntry(state, "task.merged", {
+						task: def.name,
+						target: baseBranch,
+						mergedAt,
+					});
 					removeWorktree(def.name, root);
-					addHistoryEntry(state, "task.merged", { task: def.name });
+					removeTask(state, def.name);
 					logSuccess(`  ${def.name}: merged`);
 				} else {
 					logError(

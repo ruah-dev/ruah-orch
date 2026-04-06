@@ -206,6 +206,18 @@ export function releaseLocks(state: RuahState, taskName: string): void {
 	delete state.locks[taskName];
 }
 
+export function removeTask(state: RuahState, taskName: string): void {
+	releaseLocks(state, taskName);
+
+	for (const task of Object.values(state.tasks)) {
+		if (task.children?.includes(taskName)) {
+			task.children = task.children.filter((child) => child !== taskName);
+		}
+	}
+
+	delete state.tasks[taskName];
+}
+
 export function patternsOverlap(a: string, b: string): boolean {
 	if (a === b) return true;
 

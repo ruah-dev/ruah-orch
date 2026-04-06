@@ -144,7 +144,11 @@ export async function run(args: ParsedArgs): Promise<void> {
 		if (done) parts.push(`${done} done`);
 		if (merged) parts.push(`${merged} merged`);
 		if (failed) parts.push(`${failed} failed`);
-		log(`Tasks: ${total} total (${parts.join(", ")})`);
+		log(
+			parts.length > 0
+				? `Tasks: ${total} total (${parts.join(", ")})`
+				: `Tasks: ${total} total`,
+		);
 	} else {
 		log("Tasks: none");
 	}
@@ -152,6 +156,11 @@ export async function run(args: ParsedArgs): Promise<void> {
 	if (reconciliation.merged.length > 0) {
 		logInfo(
 			`Auto-reconciled merged task(s): ${reconciliation.merged.join(", ")}`,
+		);
+	}
+	if (reconciliation.cleanedCancelled.length > 0) {
+		logInfo(
+			`Cleaned cancelled task(s): ${reconciliation.cleanedCancelled.join(", ")}`,
 		);
 	}
 

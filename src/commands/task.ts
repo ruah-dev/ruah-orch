@@ -22,6 +22,7 @@ import {
 	loadState,
 	type RuahState,
 	releaseLocks,
+	removeTask,
 	saveState,
 } from "../core/state.js";
 import {
@@ -410,17 +411,16 @@ function taskMerge(args: ParsedArgs, root: string): void {
 	const result = mergeWorktree(name, mergeTarget, root, mergeOpts);
 
 	if (result.success) {
-		task.status = "merged";
-		task.mergedAt = new Date().toISOString();
-		releaseLocks(state, name);
+		const mergedAt = new Date().toISOString();
 		addHistoryEntry(state, "task.merged", {
 			task: name,
 			target: mergeTarget,
 			parent: task.parent || null,
+			mergedAt,
 		});
-		saveState(root, state);
-
 		removeWorktree(name, root);
+		removeTask(state, name);
+		saveState(root, state);
 
 		if (isSubtask) {
 			logSuccess(

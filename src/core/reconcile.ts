@@ -1,9 +1,10 @@
 import { branchExists, isBranchMerged, removeWorktree } from "./git.js";
 import type { RuahState } from "./state.js";
-import { addHistoryEntry, releaseLocks, saveState } from "./state.js";
+import { addHistoryEntry, removeTask, saveState } from "./state.js";
 
 export interface ReconcileResult {
 	merged: string[];
+	cleanedCancelled: string[];
 }
 
 export function reconcileStateWithGit(
@@ -11,10 +12,31 @@ export function reconcileStateWithGit(
 	state: RuahState,
 ): ReconcileResult {
 	const merged: string[] = [];
+	const cleanedCancelled: string[] = [];
 
 	for (const [name, task] of Object.entries(state.tasks)) {
-		const isTerminal = task.status === "merged" || task.status === "cancelled";
-		if (isTerminal) continue;
+		if (task.status === "merged") {
+			const timestamp = new Date().toISOString();
+			addHistoryEntry(state, "task.cleaned.merged", {
+				task: name,
+				target: task.baseBranch,
+				mergedAt: task.mergedAt || timestamp,
+			});
+			removeWorktree(name, root);
+			removeTask(state, name);
+			merged.push(name);
+			continue;
+		}
+
+		if (task.status === "cancelled") {
+			addHistoryEntry(state, "task.cleaned.cancelled", {
+				task: name,
+			});
+			removeWorktree(name, root);
+			removeTask(state, name);
+			cleanedCancelled.push(name);
+			continue;
+		}
 
 		if (
 			!branchExists(task.branch, root) ||
@@ -28,21 +50,19 @@ export function reconcileStateWithGit(
 		}
 
 		const timestamp = new Date().toISOString();
-		task.status = "merged";
-		task.completedAt ??= timestamp;
-		task.mergedAt ??= timestamp;
-		releaseLocks(state, name);
 		addHistoryEntry(state, "task.reconciled.merged", {
 			task: name,
 			target: task.baseBranch,
+			mergedAt: timestamp,
 		});
 		removeWorktree(name, root);
+		removeTask(state, name);
 		merged.push(name);
 	}
 
-	if (merged.length > 0) {
+	if (merged.length > 0 || cleanedCancelled.length > 0) {
 		saveState(root, state);
 	}
 
-	return { merged };
+	return { merged, cleanedCancelled };
 }
