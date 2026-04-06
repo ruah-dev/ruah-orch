@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import type { ParsedArgs } from "../cli.js";
+import { loadConfig } from "../core/config.js";
 import { executeTask } from "../core/executor.js";
 import {
 	createWorktree,
@@ -89,7 +90,9 @@ async function workflowRun(args: ParsedArgs, root: string): Promise<void> {
 
 	const plan = getExecutionPlan(workflow.tasks);
 	const state = loadState(root);
-	const baseBranch = workflow.config.base || state.baseBranch;
+	const config = loadConfig(root);
+	const baseBranch =
+		workflow.config.base || config.baseBranch || state.baseBranch;
 
 	if (json && dryRun) {
 		console.log(
