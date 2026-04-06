@@ -28,6 +28,7 @@ describe("executor", () => {
 		assert.ok(executors.includes("codex"));
 		assert.ok(executors.includes("codex-mcp"));
 		assert.ok(executors.includes("script"));
+		assert.ok(executors.includes("raw"));
 	});
 
 	it("executeTask dry run returns command without executing", async () => {
@@ -62,10 +63,29 @@ describe("executor", () => {
 		assert.notEqual(result.exitCode, 0);
 	});
 
-	it("executeTask handles unknown executor as raw command", async () => {
+	it("executeTask rejects unknown executors", async () => {
 		const task = { name: "test", executor: "echo", prompt: "hello" };
 		const result = await executeTask(task, dir, { silent: true });
-		assert.ok(result.success);
+		assert.equal(result.success, false);
+		assert.ok(result.error?.includes("Unknown executor"));
+	});
+
+	it("executeTask supports explicit raw shell execution", async () => {
+		const task = { name: "test", executor: "raw", prompt: "echo hello" };
+		const result = await executeTask(task, dir, { silent: true });
+		assert.equal(result.success, true);
+		assert.ok(result.stdout?.includes("hello"));
+	});
+
+	it("script executor preserves quoted arguments", async () => {
+		const task = {
+			name: "quoted",
+			executor: "script",
+			prompt: `node -e "process.stdout.write(process.argv[1])" "hello world"`,
+		};
+		const result = await executeTask(task, dir, { silent: true });
+		assert.equal(result.success, true);
+		assert.equal(result.stdout, "hello world");
 	});
 
 	it("codex-mcp adapter falls back to codex CLI when no MCP URL", async () => {

@@ -1,6 +1,6 @@
 import { statSync } from "node:fs";
 import { join } from "node:path";
-import { loadState, type HistoryEntry, patternsOverlap } from "./state.js";
+import { type HistoryEntry, loadState, patternsOverlap } from "./state.js";
 import type { WorkflowTask } from "./workflow.js";
 
 // --- Types ---
@@ -127,11 +127,7 @@ export function analyzeStageOverlaps(
 					(sum, p) => sum + estimatePatternRisk(p, repoRoot),
 					0,
 				);
-				const historyPenalty = calculateHistoryPenalty(
-					a.name,
-					b.name,
-					history,
-				);
+				const historyPenalty = calculateHistoryPenalty(a.name, b.name, history);
 				const riskScore = baseRisk + historyPenalty;
 
 				overlaps.push({
@@ -357,7 +353,8 @@ function calculateHistoryPenalty(
 		}
 		if (
 			entry.action === "task.failed" &&
-			(entry.reason === "contract-violation" || entry.reason === "merge-conflict")
+			(entry.reason === "contract-violation" ||
+				entry.reason === "merge-conflict")
 		) {
 			penalty += 1.0;
 		}

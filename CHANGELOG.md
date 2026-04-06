@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.1] - 2026-04-06
+
+### Added
+- **`ruah workflow resume`** — halted workflows can now continue from preserved task state instead of recreating already-completed or recoverable work.
+- **Planner history scoring** — stage planning now considers prior contract violations and merge conflicts when deciding whether to parallelize or serialize work.
+
+### Changed
+- **Executor safety** — raw shell execution is now explicit via the `raw` executor; unknown executors no longer fall back to arbitrary shell commands.
+- **Script argument parsing** — the `script` executor now preserves quoted arguments instead of splitting only on whitespace.
+- **Recovery UX** — workflow failure and explain output now shows the exact `task takeover` and `workflow resume` commands to run next.
+
 ## [0.4.0] - 2026-04-06
 
 ### Added
