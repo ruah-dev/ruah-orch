@@ -247,7 +247,13 @@ describe("read-only locks", () => {
 			lockSnapshots: {},
 		} as unknown as RuahState;
 		const result = acquireLocks(
-			state, "reader", ["src/auth/**"], null, undefined, false, "read",
+			state,
+			"reader",
+			["src/auth/**"],
+			null,
+			undefined,
+			false,
+			"read",
 		);
 		assert.ok(result.success);
 	});
@@ -259,7 +265,13 @@ describe("read-only locks", () => {
 			lockSnapshots: {},
 		} as unknown as RuahState;
 		const result = acquireLocks(
-			state, "reader2", ["src/**"], null, undefined, false, "read",
+			state,
+			"reader2",
+			["src/**"],
+			null,
+			undefined,
+			false,
+			"read",
 		);
 		assert.ok(result.success);
 	});
@@ -271,7 +283,13 @@ describe("read-only locks", () => {
 			lockSnapshots: {},
 		} as unknown as RuahState;
 		const result = acquireLocks(
-			state, "writer", ["src/auth/**"], null, undefined, false, "write",
+			state,
+			"writer",
+			["src/auth/**"],
+			null,
+			undefined,
+			false,
+			"write",
 		);
 		assert.ok(result.success);
 	});
@@ -283,7 +301,13 @@ describe("read-only locks", () => {
 			lockSnapshots: {},
 		} as unknown as RuahState;
 		const result = acquireLocks(
-			state, "writer2", ["src/auth/**"], null, undefined, false, "write",
+			state,
+			"writer2",
+			["src/auth/**"],
+			null,
+			undefined,
+			false,
+			"write",
 		);
 		assert.ok(!result.success);
 		assert.equal(result.conflicts.length, 1);
@@ -296,7 +320,13 @@ describe("read-only locks", () => {
 			lockSnapshots: {},
 		} as unknown as RuahState;
 		const result = acquireLocks(
-			state, "new-writer", ["src/**"], null, undefined, false, "write",
+			state,
+			"new-writer",
+			["src/**"],
+			null,
+			undefined,
+			false,
+			"write",
 		);
 		assert.ok(!result.success);
 	});
@@ -319,7 +349,13 @@ describe("read-only locks", () => {
 		} as unknown as RuahState;
 		for (let i = 0; i < 5; i++) {
 			const result = acquireLocks(
-				state, `audit-${i}`, ["src/**"], null, undefined, false, "read",
+				state,
+				`audit-${i}`,
+				["src/**"],
+				null,
+				undefined,
+				false,
+				"read",
 			);
 			assert.ok(result.success, `audit-${i} should succeed`);
 		}
@@ -350,7 +386,10 @@ describe("subtask state functions", () => {
 	});
 
 	it("subtask does not conflict with parent locks", () => {
-		const state = { locks: { parent: ["src/**"] }, lockModes: { parent: "write" } } as unknown as RuahState;
+		const state = {
+			locks: { parent: ["src/**"] },
+			lockModes: { parent: "write" },
+		} as unknown as RuahState;
 		// Subtask within parent's scope should not conflict with parent
 		const result = acquireLocks(state, "child", ["src/auth/**"], "parent");
 		assert.ok(result.success);
