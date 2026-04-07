@@ -32,6 +32,8 @@ export interface Task {
 	prompt: string | null;
 	parent: string | null;
 	children: string[];
+	/** Explicit upstream dependencies — task cannot start until all are done/merged */
+	depends: string[];
 	repoRoot?: string;
 	createdAt: string;
 	startedAt: string | null;
@@ -108,11 +110,18 @@ function sleep(ms: number): void {
 
 function parseState(raw: string): RuahState {
 	const parsed = JSON.parse(raw) as Partial<RuahState>;
+	const tasks = parsed.tasks || {};
+	// Backfill `depends` for tasks created before dependency tracking
+	for (const task of Object.values(tasks)) {
+		if (!task.depends) {
+			(task as Task).depends = (task as Task).workflow?.depends ?? [];
+		}
+	}
 	return {
 		...defaultState(),
 		...parsed,
 		revision: typeof parsed.revision === "number" ? parsed.revision : 0,
-		tasks: parsed.tasks || {},
+		tasks,
 		locks: parsed.locks || {},
 		lockSnapshots: parsed.lockSnapshots || {},
 		history: parsed.history || [],
@@ -415,6 +424,52 @@ export function matchesPattern(pattern: string, path: string): boolean {
 	}
 
 	return globToRegExp(normalizedPattern).test(normalizedPath);
+}
+
+// --- Dependency / Claimability ---
+
+export interface ClaimCheck {
+	claimable: boolean;
+	/** Dependency task names that are not yet done/merged */
+	blockedBy: string[];
+}
+
+const COMPLETED_STATUSES = new Set<TaskStatus>(["done", "merged"]);
+
+/**
+ * Check whether a task's upstream dependencies are all satisfied.
+ * A task is claimable when every entry in its `depends` array is
+ * done or merged (or has been removed from state, i.e. already merged
+ * and cleaned up).
+ */
+export function isTaskClaimable(
+	state: RuahState,
+	taskName: string,
+): ClaimCheck {
+	const task = state.tasks[taskName];
+	if (!task) return { claimable: false, blockedBy: [taskName] };
+
+	const blockedBy: string[] = [];
+	for (const dep of task.depends) {
+		const depTask = state.tasks[dep];
+		// If the dep no longer exists in state it was already merged + removed
+		if (depTask && !COMPLETED_STATUSES.has(depTask.status as TaskStatus)) {
+			blockedBy.push(dep);
+		}
+	}
+
+	return { claimable: blockedBy.length === 0, blockedBy };
+}
+
+/**
+ * Return all tasks in "created" status whose upstream dependencies are
+ * fully satisfied — the set of tasks an agent can safely claim right now.
+ */
+export function getClaimableTasks(state: RuahState): Task[] {
+	return Object.values(state.tasks).filter((task) => {
+		if (task.status !== "created") return false;
+		return isTaskClaimable(state, task.name).claimable;
+	});
 }
 
 export function patternsOverlap(

@@ -18,7 +18,9 @@ import {
 	acquireLocks,
 	addHistoryEntry,
 	getChildren,
+	getClaimableTasks,
 	getUnmergedChildren,
+	isTaskClaimable,
 	loadState,
 	type RuahState,
 	releaseLocks,
@@ -66,6 +68,8 @@ export async function run(args: ParsedArgs): Promise<void> {
 			return taskRetry(args, root);
 		case "takeover":
 			return taskTakeover(args, root);
+		case "claimable":
+			return taskClaimable(args, root);
 		default:
 			logError(`Unknown task subcommand: ${sub}`);
 			process.exit(1);
@@ -148,10 +152,27 @@ function taskCreate(args: ParsedArgs, root: string): void {
 		typeof args.flags.parent === "string"
 			? args.flags.parent
 			: process.env.RUAH_PARENT_TASK || null;
+	const depends =
+		typeof args.flags.depends === "string"
+			? args.flags.depends
+					.split(",")
+					.map((d) => d.trim())
+					.filter(Boolean)
+			: [];
 	const strictLocks =
 		args.flags["strict-locks"] === true || config.strictLocks === true;
 
 	const state = loadState(root);
+
+	// Validate dependency references
+	for (const dep of depends) {
+		if (!state.tasks[dep]) {
+			logError(
+				`Dependency "${dep}" does not exist. Create it first or check the name.`,
+			);
+			process.exit(1);
+		}
+	}
 
 	if (state.tasks[name]) {
 		logError(`Task "${name}" already exists`);
@@ -223,6 +244,7 @@ function taskCreate(args: ParsedArgs, root: string): void {
 		prompt,
 		parent: parentName || null,
 		children: [],
+		depends,
 		repoRoot: root,
 		createdAt: new Date().toISOString(),
 		startedAt: null,
@@ -263,6 +285,7 @@ async function taskStart(args: ParsedArgs, root: string): Promise<void> {
 		process.exit(1);
 	}
 
+	const force = args.flags.force === true;
 	const state = loadState(root);
 	const task = state.tasks[name];
 	if (!task) {
@@ -272,6 +295,22 @@ async function taskStart(args: ParsedArgs, root: string): Promise<void> {
 	if (task.status !== "created") {
 		logError(`Task "${name}" is ${task.status}, can only start from "created"`);
 		process.exit(1);
+	}
+
+	// Dependency gate: refuse to start if upstream tasks aren't complete
+	if (task.depends.length > 0 && !force) {
+		const { claimable, blockedBy } = isTaskClaimable(state, name);
+		if (!claimable) {
+			logError(`Task "${name}" has unmet dependencies — cannot start yet`);
+			for (const dep of blockedBy) {
+				const depTask = state.tasks[dep];
+				logWarn(`  ${dep} (${depTask?.status || "unknown"})`);
+			}
+			logInfo(
+				"Wait for upstream tasks to complete, or use --force to override.",
+			);
+			process.exit(1);
+		}
 	}
 
 	task.status = "in-progress";
@@ -524,6 +563,32 @@ function taskChildren(args: ParsedArgs, root: string): void {
 	log(`Subtasks of "${name}":`);
 	for (const child of children) {
 		console.log(formatTask(child));
+	}
+}
+
+function taskClaimable(args: ParsedArgs, root: string): void {
+	const state = loadState(root);
+	const json = args.flags.json;
+	const claimable = getClaimableTasks(state);
+
+	if (json) {
+		console.log(JSON.stringify(claimable, null, 2));
+		return;
+	}
+
+	if (claimable.length === 0) {
+		logInfo(
+			"No claimable tasks (all tasks are either in-progress, blocked by dependencies, or completed)",
+		);
+		return;
+	}
+
+	log("Claimable tasks (dependencies satisfied):");
+	for (const task of claimable) {
+		console.log(formatTask(task));
+		if (task.depends.length > 0) {
+			logInfo(`  deps: ${task.depends.join(", ")} (all satisfied)`);
+		}
 	}
 }
 

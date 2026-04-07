@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.2] - 2026-04-07
+
+### Added
+- **Dependency gate on `task start`** — tasks with upstream dependencies are blocked from starting until all deps are `done` or `merged`, preventing deadlocks when multiple agents independently claim adjacent DAG tasks. Use `--force` to override.
+- **`ruah task claimable`** — new subcommand listing all `created` tasks whose upstream dependencies are fully satisfied — the set of tasks an agent can safely claim right now. Supports `--json`.
+- **`--depends` flag on `task create`** — `ruah task create integration --depends backend,frontend` adds explicit upstream dependencies to ad-hoc tasks outside workflows. References are validated at creation time.
+- **`depends` field on Task** — first-class dependency tracking on every task, not just workflow metadata. Backfilled from `workflow.depends` for existing state files.
+
+### Changed
+- **Workflow runner** now propagates `depends` from workflow task definitions onto created Task objects, so dependency info is available for distributed claiming even after the centralized runner creates tasks.
+- **State parser** backfills `depends: []` on tasks from older state files for backward compatibility.
+
 ## [0.4.1] - 2026-04-06
 
 ### Added

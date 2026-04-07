@@ -24,6 +24,7 @@ function makeTask(overrides: Partial<Task> & { name: string }): Task {
 		prompt: null,
 		parent: null,
 		children: [],
+		depends: [],
 		createdAt: new Date().toISOString(),
 		startedAt: null,
 		completedAt: null,

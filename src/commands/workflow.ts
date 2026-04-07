@@ -230,6 +230,7 @@ async function workflowRun(args: ParsedArgs, root: string): Promise<void> {
 					prompt: taskDef.prompt,
 					parent: null,
 					children: [],
+					depends: [...taskDef.depends],
 					createdAt: new Date().toISOString(),
 					startedAt: new Date().toISOString(),
 					completedAt: null,

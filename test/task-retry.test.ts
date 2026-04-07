@@ -25,6 +25,7 @@ function makeFailedTask(name: string, root: string): Task {
 		prompt: "echo hello",
 		parent: null,
 		children: [],
+		depends: [],
 		repoRoot: root,
 		createdAt: new Date().toISOString(),
 		startedAt: new Date().toISOString(),

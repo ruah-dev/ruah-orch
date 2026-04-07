@@ -202,10 +202,12 @@ ruah task create <name> [options]          Create task with isolated worktree
   --executor <cmd>                           Agent to run
   --prompt <text>                            Instructions for agent
   --parent <task>                            Create as subtask
-ruah task start <name> [--no-exec] [--dry-run]
+  --depends <tasks>                          Upstream dependencies (comma-separated)
+ruah task start <name> [--no-exec] [--dry-run] [--force]
 ruah task done <name>
 ruah task merge <name> [--dry-run] [--skip-gates]
 ruah task list [--json]
+ruah task claimable [--json]              List tasks ready to claim (deps satisfied)
 ruah task children <name> [--json]
 ruah task cancel <name>
 ruah task retry <name> [--no-exec] [--dry-run]
