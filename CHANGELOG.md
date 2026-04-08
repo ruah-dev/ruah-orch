@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.0-alpha] - 2026-04-08
+
+### Added
+- **Workspace provider abstraction** — task and workflow execution now run through a canonical workspace provider contract, with `worktree` as the current production backend.
+- **Canonical task engine model** — tasks now track workspace metadata, claims, artifacts, and integration status in addition to the legacy `branch`, `worktree`, and `files` fields.
+- **Artifact capture** — successful tasks persist durable task artifacts with changed files, patches, commit metadata, claims, and validation results.
+- **Compatibility engine primitives** — Git-backed artifact/base and artifact/artifact comparison helpers classify clean, conflicting, and stale execution states.
+- **State migration layer** — `.ruah/state.json` now migrates older task records forward into the canonical engine shape while preserving backward readability.
+- **Engine JSON visibility** — `ruah status --json`, `ruah doctor --json`, and `ruah config` now expose engine configuration, artifact presence, and canonical workspace metadata.
+- **Release-grade engine tests** — added direct test coverage for state migration, workspace provider behavior, artifact capture, and compatibility checks.
+
+### Changed
+- **Planner and contract system** now operate on canonical claims while preserving the previous path-based behavior when compatibility signals are absent.
+- **Task and workflow commands** now use workspace handles internally instead of directly coupling orchestration logic to raw worktree calls.
+- **README positioning** now reflects `ruah` as an alpha orchestration engine, not only a worktree wrapper.
+
+### Notes
+- `worktree` remains the only shipped backend in `1.0.0-alpha`.
+- Legacy task fields remain readable for backward compatibility during the engine transition.
+
 ## [0.4.3] - 2026-04-07
 
 ### Added

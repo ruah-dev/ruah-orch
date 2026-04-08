@@ -1,8 +1,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import {
+	type ClaimSet,
+	claimMatchesPattern,
+	claimSetFromSource,
+} from "./claims.js";
 import { listChangedFilesAgainstBase, readFileAtRef } from "./git.js";
 import type { FileContract } from "./planner.js";
-import { matchesPattern } from "./state.js";
 
 export type ContractViolationType =
 	| "outside-contract"
@@ -26,7 +30,9 @@ function findMatchingPattern(
 	patterns: string[],
 	filePath: string,
 ): string | null {
-	return patterns.find((pattern) => matchesPattern(pattern, filePath)) ?? null;
+	return (
+		patterns.find((pattern) => claimMatchesPattern(pattern, filePath)) ?? null
+	);
 }
 
 function countLines(content: string): number {
@@ -77,22 +83,41 @@ function validateAppendOnlyChange(
 	return { ok: true };
 }
 
+function isClaimSet(value: FileContract | ClaimSet): value is ClaimSet {
+	return "ownedPaths" in value;
+}
+
+function contractToClaims(contract: FileContract | ClaimSet): ClaimSet {
+	if (isClaimSet(contract)) {
+		return claimSetFromSource(contract);
+	}
+
+	return claimSetFromSource(
+		contract.claims || {
+			owned: contract.owned,
+			sharedAppend: contract.sharedAppend,
+			readOnly: contract.readOnly,
+		},
+	);
+}
+
 export function validateContractChanges(
-	contract: FileContract,
+	contract: FileContract | ClaimSet,
 	worktreePath: string,
 	repoRoot: string,
 	baseRef: string,
 ): ContractValidationResult {
 	const changedFiles = listChangedFilesAgainstBase(baseRef, worktreePath);
 	const violations: ContractViolation[] = [];
+	const claims = contractToClaims(contract);
 
 	for (const file of changedFiles) {
-		const ownedPattern = findMatchingPattern(contract.owned, file);
+		const ownedPattern = findMatchingPattern(claims.ownedPaths, file);
 		if (ownedPattern) {
 			continue;
 		}
 
-		const readOnlyPattern = findMatchingPattern(contract.readOnly, file);
+		const readOnlyPattern = findMatchingPattern(claims.readOnlyPaths, file);
 		if (readOnlyPattern) {
 			violations.push({
 				type: "read-only",
@@ -103,7 +128,7 @@ export function validateContractChanges(
 			continue;
 		}
 
-		const sharedPattern = findMatchingPattern(contract.sharedAppend, file);
+		const sharedPattern = findMatchingPattern(claims.sharedPaths, file);
 		if (sharedPattern) {
 			const appendCheck = validateAppendOnlyChange(
 				baseRef,

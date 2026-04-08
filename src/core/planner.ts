@@ -1,20 +1,52 @@
 import { statSync } from "node:fs";
 import { join } from "node:path";
-import { type HistoryEntry, loadState, patternsOverlap } from "./state.js";
+import {
+	type ClaimSet,
+	claimPatterns,
+	claimSetFromPaths,
+	claimSetsOverlap,
+	claimSetToBuckets,
+	normalizeClaimSet,
+} from "./claims.js";
+import { type HistoryEntry, loadState } from "./state.js";
 import type { WorkflowTask } from "./workflow.js";
 
 // --- Types ---
 
 export type FileAccessMode = "owned" | "shared-append" | "read-only";
 
+export interface CompatibilitySignal {
+	clean: boolean;
+	staleBase?: boolean;
+	needsReplay?: boolean;
+	conflictingFiles?: string[];
+}
+
 export interface FileContract {
 	taskName: string;
+	/** Canonical claims representation */
+	claims?: ClaimSet | null;
 	/** Files this agent exclusively owns — modify freely */
 	owned: string[];
 	/** Files shared with other agents — only append new code, don't modify existing lines */
 	sharedAppend: string[];
 	/** Files visible but must not be modified */
 	readOnly: string[];
+}
+
+export interface PlanningTask extends WorkflowTask {
+	claims?: ClaimSet | null;
+	compatibility?: CompatibilitySignal | null;
+}
+
+export interface SmartPlanOptions {
+	compatibilityByPair?:
+		| Map<string, CompatibilitySignal>
+		| Record<string, CompatibilitySignal>;
+	compatibilityByTask?:
+		| Map<string, CompatibilitySignal>
+		| Record<string, CompatibilitySignal>;
+	claimsByTask?: Map<string, ClaimSet> | Record<string, ClaimSet>;
 }
 
 export interface TaskPairOverlap {
@@ -28,6 +60,8 @@ export interface TaskPairOverlap {
 	riskScore: number;
 	/** Extra risk pulled from prior ruah failures/conflicts */
 	historyPenalty: number;
+	/** Optional compatibility signal for this pair */
+	compatibility?: CompatibilitySignal | null;
 }
 
 export type StageStrategy = "parallel" | "parallel-with-contracts" | "serial";
@@ -68,6 +102,78 @@ const OVERLAP_RATIO_THRESHOLD = 0.3;
 /** Maximum risk score to allow parallel-with-contracts (above this → serial) */
 const RISK_SCORE_THRESHOLD = 2.0;
 
+function getMapValue<T>(
+	source: Map<string, T> | Record<string, T> | undefined,
+	key: string,
+): T | undefined {
+	if (!source) return undefined;
+	if (source instanceof Map) {
+		return source.get(key);
+	}
+	return source[key];
+}
+
+function compatibilityKey(a: string, b: string): string {
+	return a < b ? `${a}::${b}` : `${b}::${a}`;
+}
+
+function getTaskClaims(
+	task: PlanningTask,
+	options: SmartPlanOptions = {},
+): ClaimSet {
+	const directClaims =
+		task.claims ?? getMapValue(options.claimsByTask, task.name);
+	if (directClaims) {
+		return normalizeClaimSet(directClaims);
+	}
+	return claimSetFromPaths(task.files);
+}
+
+function hasExplicitClaims(
+	task: PlanningTask,
+	options: SmartPlanOptions = {},
+): boolean {
+	return Boolean(task.claims || getMapValue(options.claimsByTask, task.name));
+}
+
+function getPairCompatibility(
+	a: string,
+	b: string,
+	options: SmartPlanOptions = {},
+): CompatibilitySignal | undefined {
+	return getMapValue(options.compatibilityByPair, compatibilityKey(a, b));
+}
+
+function getTaskCompatibility(
+	task: PlanningTask,
+	options: SmartPlanOptions = {},
+): CompatibilitySignal | undefined {
+	return (
+		task.compatibility ?? getMapValue(options.compatibilityByTask, task.name)
+	);
+}
+
+function buildClaimContract(
+	task: PlanningTask,
+	options: SmartPlanOptions = {},
+): FileContract {
+	const claims = getTaskClaims(task, options);
+	return {
+		taskName: task.name,
+		claims,
+		owned: [...claims.ownedPaths],
+		sharedAppend: [...claims.sharedPaths],
+		readOnly: [...claims.readOnlyPaths],
+	};
+}
+
+function isCompatibilityConflict(signal?: CompatibilitySignal | null): boolean {
+	if (!signal) return false;
+	return Boolean(
+		!signal.clean || signal.staleBase === true || signal.needsReplay === true,
+	);
+}
+
 // --- File Size Heuristic ---
 
 /**
@@ -98,8 +204,9 @@ export function estimatePatternRisk(pattern: string, repoRoot: string): number {
  * Returns one TaskPairOverlap for every pair that has any overlap.
  */
 export function analyzeStageOverlaps(
-	tasks: WorkflowTask[],
+	tasks: PlanningTask[],
 	repoRoot: string,
+	options: SmartPlanOptions = {},
 ): TaskPairOverlap[] {
 	const overlaps: TaskPairOverlap[] = [];
 	const history = loadState(repoRoot).history;
@@ -108,37 +215,45 @@ export function analyzeStageOverlaps(
 		for (let j = i + 1; j < tasks.length; j++) {
 			const a = tasks[i];
 			const b = tasks[j];
-			const overlapping: string[] = [];
+			const claimsA = getTaskClaims(a, options);
+			const claimsB = getTaskClaims(b, options);
+			const overlapping = claimSetsOverlap(claimsA, claimsB, repoRoot);
+			const compatibility = getPairCompatibility(a.name, b.name, options);
+			const taskCompatibilityA = getTaskCompatibility(a, options);
+			const taskCompatibilityB = getTaskCompatibility(b, options);
+			const hasCompatConflict =
+				isCompatibilityConflict(compatibility) ||
+				isCompatibilityConflict(taskCompatibilityA) ||
+				isCompatibilityConflict(taskCompatibilityB);
 
-			for (const pa of a.files) {
-				for (const pb of b.files) {
-					if (patternsOverlap(pa, pb, repoRoot)) {
-						// Add both patterns to show what overlaps
-						if (!overlapping.includes(pa)) overlapping.push(pa);
-						if (!overlapping.includes(pb)) overlapping.push(pb);
-					}
-				}
+			if (overlapping.length === 0 && !hasCompatConflict) {
+				continue;
 			}
 
-			if (overlapping.length > 0) {
-				const unionSize = new Set([...a.files, ...b.files]).size;
-				const overlapRatio = overlapping.length / unionSize;
-				const baseRisk = overlapping.reduce(
-					(sum, p) => sum + estimatePatternRisk(p, repoRoot),
-					0,
-				);
-				const historyPenalty = calculateHistoryPenalty(a.name, b.name, history);
-				const riskScore = baseRisk + historyPenalty;
+			const unionSize = new Set([
+				...claimPatterns(claimsA),
+				...claimPatterns(claimsB),
+			]).size;
+			const overlapRatio =
+				unionSize > 0 ? Math.min(overlapping.length / unionSize, 1.0) : 0;
+			const baseRisk = overlapping.reduce<number>(
+				(sum: number, pattern: string) =>
+					sum + estimatePatternRisk(pattern, repoRoot),
+				0,
+			);
+			const historyPenalty = calculateHistoryPenalty(a.name, b.name, history);
+			const compatibilityPenalty = hasCompatConflict ? 3 : 0;
+			const riskScore = baseRisk + historyPenalty + compatibilityPenalty;
 
-				overlaps.push({
-					taskA: a.name,
-					taskB: b.name,
-					overlappingPatterns: overlapping,
-					overlapRatio: Math.min(overlapRatio, 1.0),
-					riskScore,
-					historyPenalty,
-				});
-			}
+			overlaps.push({
+				taskA: a.name,
+				taskB: b.name,
+				overlappingPatterns: overlapping,
+				overlapRatio,
+				riskScore,
+				historyPenalty,
+				compatibility: compatibility || null,
+			});
 		}
 	}
 
@@ -151,9 +266,20 @@ export function analyzeStageOverlaps(
  * Given tasks with manageable overlap, assign file access modes to each task.
  */
 export function buildContracts(
-	tasks: WorkflowTask[],
+	tasks: PlanningTask[],
 	_overlaps: TaskPairOverlap[],
+	options: SmartPlanOptions = {},
 ): Map<string, FileContract> {
+	const explicitClaims = tasks.some((task) => hasExplicitClaims(task, options));
+
+	if (explicitClaims) {
+		const contracts = new Map<string, FileContract>();
+		for (const task of tasks) {
+			contracts.set(task.name, buildClaimContract(task, options));
+		}
+		return contracts;
+	}
+
 	// Count how many tasks reference each pattern
 	const patternRefCount = new Map<string, string[]>();
 	for (const task of tasks) {
@@ -176,6 +302,11 @@ export function buildContracts(
 	for (const task of tasks) {
 		contracts.set(task.name, {
 			taskName: task.name,
+			claims: normalizeClaimSet({
+				ownedPaths: [],
+				sharedPaths: [],
+				readOnlyPaths: [],
+			}),
 			owned: [],
 			sharedAppend: [],
 			readOnly: [],
@@ -223,6 +354,11 @@ export function buildContracts(
 				contract.readOnly.push(pattern);
 			}
 		}
+		contract.claims = normalizeClaimSet({
+			ownedPaths: contract.owned,
+			sharedPaths: contract.sharedAppend,
+			readOnlyPaths: contract.readOnly,
+		});
 	}
 
 	return contracts;
@@ -234,9 +370,10 @@ export function buildContracts(
  * Given overlap analysis for a stage, decide the execution strategy.
  */
 export function decideStageStrategy(
-	tasks: WorkflowTask[],
+	tasks: PlanningTask[],
 	overlaps: TaskPairOverlap[],
 	_repoRoot: string,
+	options: SmartPlanOptions = {},
 ): StageDecision {
 	// Single task — always parallel (nothing to conflict with)
 	if (tasks.length <= 1) {
@@ -247,17 +384,46 @@ export function decideStageStrategy(
 		};
 	}
 
-	// No overlaps — safe to parallelize
-	if (overlaps.length === 0) {
+	const hardCompatibilityConflicts = overlaps.filter((overlap) => {
+		const compatibility = overlap.compatibility;
+		return Boolean(
+			compatibility &&
+				(!compatibility.clean ||
+					compatibility.staleBase === true ||
+					compatibility.needsReplay === true),
+		);
+	});
+
+	if (hardCompatibilityConflicts.length > 0) {
+		const sorted = [...tasks].sort((a, b) => a.name.localeCompare(b.name));
+		const conflictNames = hardCompatibilityConflicts
+			.map((overlap) => `${overlap.taskA}↔${overlap.taskB}`)
+			.join(", ");
+		return {
+			strategy: "serial",
+			tasks,
+			serialOrder: sorted.map((t) => [t]),
+			reason: `compatibility risk detected (${conflictNames}) — serializing to prevent conflicts`,
+		};
+	}
+
+	const effectiveOverlaps = overlaps.filter(
+		(overlap) => !overlap.compatibility || overlap.compatibility.clean !== true,
+	);
+
+	if (effectiveOverlaps.length === 0) {
 		return {
 			strategy: "parallel",
 			tasks,
-			reason: "no file overlaps detected",
+			reason:
+				overlaps.length > 0
+					? "compatibility data indicates safe parallelism"
+					: "no file overlaps detected",
 		};
 	}
 
 	// Check if any overlap exceeds thresholds
-	const hasHighOverlap = overlaps.some(
+	const hasHighOverlap = effectiveOverlaps.some(
 		(o) =>
 			o.overlapRatio > OVERLAP_RATIO_THRESHOLD ||
 			o.riskScore > RISK_SCORE_THRESHOLD,
@@ -269,7 +435,7 @@ export function decideStageStrategy(
 		for (const task of tasks) {
 			connectionCount.set(task.name, 0);
 		}
-		for (const o of overlaps) {
+		for (const o of effectiveOverlaps) {
 			connectionCount.set(o.taskA, (connectionCount.get(o.taskA) || 0) + 1);
 			connectionCount.set(o.taskB, (connectionCount.get(o.taskB) || 0) + 1);
 		}
@@ -280,9 +446,9 @@ export function decideStageStrategy(
 			return diff !== 0 ? diff : a.name.localeCompare(b.name);
 		});
 
-		const maxRatio = Math.max(...overlaps.map((o) => o.overlapRatio));
-		const maxRisk = Math.max(...overlaps.map((o) => o.riskScore));
-		const historyPenalty = overlaps.reduce(
+		const maxRatio = Math.max(...effectiveOverlaps.map((o) => o.overlapRatio));
+		const maxRisk = Math.max(...effectiveOverlaps.map((o) => o.riskScore));
+		const historyPenalty = effectiveOverlaps.reduce(
 			(sum, overlap) => sum + overlap.historyPenalty,
 			0,
 		);
@@ -300,8 +466,8 @@ export function decideStageStrategy(
 	}
 
 	// Manageable overlap — parallel with contracts
-	const contracts = buildContracts(tasks, overlaps);
-	const historyPenalty = overlaps.reduce(
+	const contracts = buildContracts(tasks, effectiveOverlaps, options);
+	const historyPenalty = effectiveOverlaps.reduce(
 		(sum, overlap) => sum + overlap.historyPenalty,
 		0,
 	);
@@ -313,7 +479,7 @@ export function decideStageStrategy(
 		strategy: "parallel-with-contracts",
 		tasks,
 		contracts,
-		reason: `${overlaps.length} overlap(s) within thresholds${historySuffix} — parallel with modification contracts`,
+		reason: `${effectiveOverlaps.length} overlap(s) within thresholds${historySuffix} — parallel with modification contracts`,
 	};
 }
 
@@ -370,9 +536,10 @@ function calculateHistoryPenalty(
  * Main entry point.
  */
 export function createSmartPlan(
-	stages: WorkflowTask[][],
+	stages: PlanningTask[][],
 	repoRoot: string,
 	maxParallel?: number,
+	options: SmartPlanOptions = {},
 ): SmartPlan {
 	const limit = maxParallel ?? 5;
 	const allOverlaps: TaskPairOverlap[] = [];
@@ -392,9 +559,9 @@ export function createSmartPlan(
 			continue;
 		}
 
-		const overlaps = analyzeStageOverlaps(stage, repoRoot);
+		const overlaps = analyzeStageOverlaps(stage, repoRoot, options);
 		allOverlaps.push(...overlaps);
-		const decision = decideStageStrategy(stage, overlaps, repoRoot);
+		const decision = decideStageStrategy(stage, overlaps, repoRoot, options);
 
 		// If strategy allows parallelism and tasks exceed the limit, split into sub-batches
 		if (
@@ -459,6 +626,13 @@ export function createSmartPlan(
  * Render a FileContract as markdown for inclusion in .ruah-task.md.
  */
 export function renderContractMarkdown(contract: FileContract): string {
+	const buckets = contract.claims
+		? claimSetToBuckets(contract.claims)
+		: {
+				owned: contract.owned,
+				sharedAppend: contract.sharedAppend,
+				readOnly: contract.readOnly,
+			};
 	const sections: string[] = [
 		"## Modification Contract",
 		"",
@@ -466,28 +640,28 @@ export function renderContractMarkdown(contract: FileContract): string {
 		"Follow these rules to avoid merge conflicts.",
 	];
 
-	if (contract.owned.length > 0) {
+	if (buckets.owned.length > 0) {
 		sections.push("");
 		sections.push("### Owned Files (modify freely)");
-		for (const f of contract.owned) {
+		for (const f of buckets.owned) {
 			sections.push(`- ${f}`);
 		}
 	}
 
-	if (contract.sharedAppend.length > 0) {
+	if (buckets.sharedAppend.length > 0) {
 		sections.push("");
 		sections.push(
 			"### Shared Files (append-only — add new code, do NOT modify existing lines)",
 		);
-		for (const f of contract.sharedAppend) {
+		for (const f of buckets.sharedAppend) {
 			sections.push(`- ${f}`);
 		}
 	}
 
-	if (contract.readOnly.length > 0) {
+	if (buckets.readOnly.length > 0) {
 		sections.push("");
 		sections.push("### Read-Only Files (do not modify)");
-		for (const f of contract.readOnly) {
+		for (const f of buckets.readOnly) {
 			sections.push(`- ${f}`);
 		}
 	}

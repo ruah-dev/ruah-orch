@@ -18,6 +18,14 @@ export interface RuahConfig {
 	maxParallel?: number;
 	/** Reject lock globs that cannot be resolved to concrete repo files */
 	strictLocks?: boolean;
+	/** Execution workspace backend */
+	workspaceBackend?: "worktree";
+	/** Persist task artifacts after successful execution */
+	captureArtifacts?: boolean;
+	/** Enable speculative compatibility checks */
+	enableCompatibilityChecks?: boolean;
+	/** Enable planner v2 compatibility-aware scheduling */
+	enablePlannerV2?: boolean;
 }
 
 const EMPTY_CONFIG: RuahConfig = {};
@@ -76,6 +84,14 @@ function validateConfig(raw: unknown): RuahConfig {
 		config.maxParallel = Math.floor(obj.maxParallel);
 	if (typeof obj.strictLocks === "boolean")
 		config.strictLocks = obj.strictLocks;
+	if (obj.workspaceBackend === "worktree")
+		config.workspaceBackend = obj.workspaceBackend;
+	if (typeof obj.captureArtifacts === "boolean")
+		config.captureArtifacts = obj.captureArtifacts;
+	if (typeof obj.enableCompatibilityChecks === "boolean")
+		config.enableCompatibilityChecks = obj.enableCompatibilityChecks;
+	if (typeof obj.enablePlannerV2 === "boolean")
+		config.enablePlannerV2 = obj.enablePlannerV2;
 
 	return config;
 }

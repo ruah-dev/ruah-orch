@@ -1,13 +1,10 @@
 import type { ParsedArgs } from "../cli.js";
+import { buildTaskArtifact } from "../core/artifact.js";
+import { claimSetFromFiles } from "../core/claims.js";
 import { loadConfig } from "../core/config.js";
 import { executeTask } from "../core/executor.js";
-import {
-	createWorktree,
-	getRepoRoot,
-	getWorktreeDiff,
-	mergeWorktree,
-	removeWorktree,
-} from "../core/git.js";
+import { getRepoRoot } from "../core/git.js";
+import { compareArtifactToBase } from "../core/integration.js";
 import {
 	detectCrag,
 	readCragGovernance,
@@ -28,6 +25,10 @@ import {
 	saveState,
 } from "../core/state.js";
 import {
+	getWorkspaceProvider,
+	type WorkspaceHandle,
+} from "../core/workspace.js";
+import {
 	formatLocks,
 	formatTask,
 	formatTaskList,
@@ -37,6 +38,35 @@ import {
 	logSuccess,
 	logWarn,
 } from "../utils/format.js";
+
+function taskWorkspace(task: Task): WorkspaceHandle {
+	if (task.workspace) return task.workspace;
+	if (!task.worktree) {
+		throw new Error(`Task "${task.name}" is missing workspace metadata`);
+	}
+	return {
+		id: task.name,
+		kind: "worktree",
+		root: task.worktree,
+		baseRef: task.baseBranch,
+		headRef: task.branch,
+		metadata: task.branch ? { branchName: task.branch } : undefined,
+	};
+}
+
+function taskWorktreeRoot(task: Task): string {
+	return taskWorkspace(task).root;
+}
+
+function syncLegacyTaskFields(task: Task): void {
+	if (!task.workspace) return;
+	task.worktree = task.workspace.root;
+	task.branch =
+		task.workspace.metadata?.branchName ||
+		task.workspace.headRef ||
+		task.branch;
+	task.files = task.files || [];
+}
 
 export async function run(args: ParsedArgs): Promise<void> {
 	const sub = args._[1];
@@ -89,9 +119,13 @@ async function executeTaskLifecycle(
 	},
 ): Promise<void> {
 	if (task.prompt && !options.noExec) {
+		const config = loadConfig(root);
+		const provider = getWorkspaceProvider();
+		const workspace = taskWorkspace(task);
+		state.artifacts ||= {};
 		log(`${options.startVerb} ${task.executor || "default"}...`);
 
-		const result = await executeTask(task, task.worktree, {
+		const result = await executeTask(task, workspace.root, {
 			dryRun: options.dryRun,
 		});
 
@@ -103,6 +137,41 @@ async function executeTaskLifecycle(
 		if (result.success) {
 			task.status = "done";
 			task.completedAt = new Date().toISOString();
+			task.workspace = {
+				...workspace,
+				headRef: provider.currentHead(workspace, root),
+			};
+			if (config.captureArtifacts !== false) {
+				task.artifact = buildTaskArtifact(provider, {
+					taskName: task.name,
+					workspace: task.workspace,
+					baseRef: task.baseBranch,
+					repoRoot: root,
+					claims: task.claims,
+					validation: {
+						executorSuccess: true,
+						contractSuccess: true,
+					},
+				});
+				state.artifacts[task.name] = task.artifact;
+				if (config.enableCompatibilityChecks) {
+					const compatibility = compareArtifactToBase(
+						task.artifact,
+						task.baseBranch,
+						root,
+					);
+					task.integration = {
+						status: compatibility.staleBase
+							? "stale"
+							: compatibility.clean
+								? "clean"
+								: "conflict",
+						conflictsWith: compatibility.conflictingFiles,
+						lastCheckedAt: compatibility.checkedAt,
+					};
+				}
+			}
+			syncLegacyTaskFields(task);
 			addHistoryEntry(state, "task.done", { task: task.name });
 			saveState(root, state);
 			logSuccess(options.successMessage);
@@ -163,6 +232,7 @@ function taskCreate(args: ParsedArgs, root: string): void {
 	const lockMode = readOnly ? ("read" as const) : ("write" as const);
 	const strictLocks =
 		args.flags["strict-locks"] === true || config.strictLocks === true;
+	const provider = getWorkspaceProvider();
 
 	const state = loadState(root);
 
@@ -199,7 +269,7 @@ function taskCreate(args: ParsedArgs, root: string): void {
 			);
 			process.exit(1);
 		}
-		base = parentTask.branch;
+		base = parentTask.branch || parentTask.baseBranch;
 	} else {
 		base = baseBranch || state.baseBranch;
 	}
@@ -233,13 +303,27 @@ function taskCreate(args: ParsedArgs, root: string): void {
 	}
 
 	// Create worktree
-	const { worktreePath, branchName } = createWorktree(name, base, root);
+	const workspace = provider.create(name, base, root);
+	const worktreePath = workspace.root;
+	const branchName =
+		workspace.metadata?.branchName || workspace.headRef || `ruah/${name}`;
+	const claims = claimSetFromFiles(files, lockMode);
 
 	// Save task
 	state.tasks[name] = {
 		name,
 		status: "created",
-		baseBranch: parentName && parentTask ? parentTask.branch : base,
+		baseBranch:
+			parentName && parentTask
+				? parentTask.branch || parentTask.baseBranch
+				: base,
+		workspace,
+		claims,
+		artifact: null,
+		integration: {
+			status: "unknown",
+			conflictsWith: [],
+		},
 		branch: branchName,
 		worktree: worktreePath,
 		files,
@@ -291,6 +375,7 @@ async function taskStart(args: ParsedArgs, root: string): Promise<void> {
 
 	const force = args.flags.force === true;
 	const state = loadState(root);
+	state.artifacts ||= {};
 	const task = state.tasks[name];
 	if (!task) {
 		logError(`Task "${name}" not found`);
@@ -344,6 +429,7 @@ function taskDone(args: ParsedArgs, root: string): void {
 	}
 
 	const state = loadState(root);
+	state.artifacts ||= {};
 	const task = state.tasks[name];
 	if (!task) {
 		logError(`Task "${name}" not found`);
@@ -357,7 +443,9 @@ function taskDone(args: ParsedArgs, root: string): void {
 	}
 
 	// Show diff summary
-	const diff = getWorktreeDiff(name, task.baseBranch, root);
+	const provider = getWorkspaceProvider();
+	const workspace = taskWorkspace(task);
+	const diff = provider.diffStat(workspace, task.baseBranch, root);
 	if (diff) {
 		log("Changes:");
 		console.log(diff);
@@ -365,6 +453,25 @@ function taskDone(args: ParsedArgs, root: string): void {
 
 	task.status = "done";
 	task.completedAt = new Date().toISOString();
+	task.workspace = {
+		...workspace,
+		headRef: provider.currentHead(workspace, root),
+	};
+	if (loadConfig(root).captureArtifacts !== false) {
+		task.artifact = buildTaskArtifact(provider, {
+			taskName: task.name,
+			workspace: task.workspace,
+			baseRef: task.baseBranch,
+			repoRoot: root,
+			claims: task.claims,
+			validation: {
+				executorSuccess: true,
+				contractSuccess: true,
+			},
+		});
+		state.artifacts[task.name] = task.artifact;
+	}
+	syncLegacyTaskFields(task);
 	addHistoryEntry(state, "task.done", { task: name });
 	saveState(root, state);
 
@@ -404,13 +511,15 @@ function taskMerge(args: ParsedArgs, root: string): void {
 
 	const dryRun = args.flags["dry-run"];
 	const skipGates = args.flags["skip-gates"];
+	const provider = getWorkspaceProvider();
+	const workspace = taskWorkspace(task);
 
 	// Determine merge target — subtasks merge into parent branch, not base
 	const mergeTarget = task.baseBranch;
 	const isSubtask = !!task.parent;
 
 	if (dryRun) {
-		const diff = getWorktreeDiff(name, mergeTarget, root);
+		const diff = provider.diffStat(workspace, mergeTarget, root);
 		log(
 			`Dry run — changes that would be merged into ${isSubtask ? `parent (${task.parent})` : mergeTarget}:`,
 		);
@@ -425,7 +534,7 @@ function taskMerge(args: ParsedArgs, root: string): void {
 			log("Running crag gates...");
 			const governance = readCragGovernance(root);
 			if (governance) {
-				const gateResult = runGates(governance, task.worktree);
+				const gateResult = runGates(governance, workspace.root);
 				for (const r of gateResult.results) {
 					if (r.success) {
 						logSuccess(
@@ -460,13 +569,17 @@ function taskMerge(args: ParsedArgs, root: string): void {
 
 	// Merge — subtasks merge from within the parent's worktree
 	const mergeOpts: { parentWorktree?: string } = {};
+	let parentWorkspace: WorkspaceHandle | undefined;
 	if (isSubtask) {
 		const parentTask = task.parent ? state.tasks[task.parent] : undefined;
-		if (parentTask?.worktree) {
-			mergeOpts.parentWorktree = parentTask.worktree;
+		if (parentTask?.workspace || parentTask?.worktree) {
+			parentWorkspace = taskWorkspace(parentTask);
+			mergeOpts.parentWorktree = parentWorkspace.root;
 		}
 	}
-	const result = mergeWorktree(name, mergeTarget, root, mergeOpts);
+	const result = provider.merge(workspace, mergeTarget, root, {
+		parentWorkspace,
+	});
 
 	if (result.success) {
 		const mergedAt = new Date().toISOString();
@@ -476,7 +589,7 @@ function taskMerge(args: ParsedArgs, root: string): void {
 			parent: task.parent || null,
 			mergedAt,
 		});
-		removeWorktree(name, root);
+		provider.remove(workspace, root);
 		removeTask(state, name);
 		saveState(root, state);
 
@@ -636,7 +749,7 @@ async function taskRetry(args: ParsedArgs, root: string): Promise<void> {
 		});
 	} else if (!task.prompt) {
 		logInfo("No prompt set — task is ready for manual retry");
-		log(`Worktree: ${task.worktree}`);
+		log(`Worktree: ${taskWorktreeRoot(task)}`);
 	}
 }
 
@@ -684,7 +797,7 @@ async function taskTakeover(args: ParsedArgs, root: string): Promise<void> {
 	}
 
 	logSuccess(`Task "${name}" taken over`);
-	logInfo(`Worktree: ${nextTask.worktree}`);
+	logInfo(`Worktree: ${taskWorktreeRoot(nextTask)}`);
 	if (nextTask.workflow) {
 		logInfo(
 			`Workflow: ${nextTask.workflow.name} (stage ${nextTask.workflow.stage})`,
@@ -734,10 +847,11 @@ function taskCancel(args: ParsedArgs, root: string): void {
 	}
 
 	// Cascade cancel to all children
+	const provider = getWorkspaceProvider();
 	const children = getChildren(state, name);
 	for (const child of children) {
 		if (child.status !== "merged" && child.status !== "cancelled") {
-			removeWorktree(child.name, root);
+			provider.remove(taskWorkspace(child), root);
 			child.status = "cancelled";
 			releaseLocks(state, child.name);
 			addHistoryEntry(state, "task.cancelled", {
@@ -748,7 +862,7 @@ function taskCancel(args: ParsedArgs, root: string): void {
 		}
 	}
 
-	removeWorktree(name, root);
+	provider.remove(taskWorkspace(task), root);
 	releaseLocks(state, name);
 	task.status = "cancelled";
 	addHistoryEntry(state, "task.cancelled", { task: name });

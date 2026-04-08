@@ -1,16 +1,29 @@
 # ruah
 
-**Multiple agents, one repo, no stepping on each other.**
+**Multi-agent orchestration that actually coordinates code changes.**
 
-When multiple AI agents work on the same repo, their edits collide. ruah gives each agent its own git worktree, checks the files it's touching, and merges everything back in dependency order.
+When multiple AI agents work on the same repo, their edits collide. `ruah` gives each task an isolated workspace, tracks claims over the files it is allowed to touch, captures durable artifacts for what changed, and merges everything back in dependency order.
+
+`ruah` uses Git worktrees for isolated task execution and is structured around workspace providers, claims, artifacts, and compatibility checks.
 
 ```
-  agent 1 ──→ worktree A ──→ src/auth/**  🔒
-  agent 2 ──→ worktree B ──→ src/ui/**    🔒  ← conflicts blocked early
-  agent 3 ──→ worktree C ──→ tests/**     🔒
+  agent 1 ──→ workspace A ──→ src/auth/**  🔒
+  agent 2 ──→ workspace B ──→ src/ui/**    🔒
+  agent 3 ──→ workspace C ──→ tests/**     🔒
+                      │
+                      └─→ artifacts + compatibility signals
 ```
 
 Zero runtime dependencies. Works with Claude Code, Aider, Codex, Cursor, Windsurf, and any CLI.
+
+## What 1.0.0-alpha Includes
+
+- task orchestration with isolated workspaces
+- canonical claims for owned/shared/read-only file access
+- durable task artifacts in state
+- compatibility-check engine primitives
+- workflow planning with claim-aware contracts
+- backward-compatible state migration toward the engine model
 
 ## See It
 
@@ -34,7 +47,7 @@ npx @levi-tc/ruah init
 ruah task create auth --files "src/auth/**" --executor claude-code --prompt "Add authentication"
 ruah task create ui   --files "src/ui/**"   --executor aider       --prompt "Build dashboard"
 
-# Both run in parallel — separate worktrees, isolated edit scopes
+# Both run in parallel — separate workspaces, isolated edit scopes
 ruah task start auth
 ruah task start ui
 
@@ -49,22 +62,26 @@ Or define a full workflow as a DAG:
 ruah workflow run .ruah/workflows/feature.md
 ```
 
-## Why Not Just Branches?
+## Why Not Just Branches Or Worktrees Alone?
 
-Branches isolate history. They do not coordinate concurrent agent execution inside one repo.
+Branches isolate history. Worktrees isolate checkouts. Neither is enough on its own to coordinate concurrent agent execution inside one repo.
 
-- ruah gives each task its own worktree, so agents do not share a checkout
+- ruah gives each task its own workspace, so agents do not share a checkout
 - ruah rejects overlapping lock scopes before agents start
+- ruah captures artifacts for what each task actually changed
+- ruah can expose compatibility signals and preserved artifacts through state/JSON output
 - ruah can validate contract violations before merge instead of discovering them at the end
 
 ## Guarantees / Non-Guarantees
 
 ruah currently guarantees:
 
-- worktree isolation per task
+- workspace isolation per task
 - process-safe state writes with stale-write rejection
 - lock conflict checks at task creation, resolved against repo files when available
 - contract enforcement for read-only and shared-append workflow stages
+- durable artifact capture for completed tasks
+- backward-compatible migration of older state into the canonical engine model
 
 ruah does not yet guarantee:
 
@@ -74,9 +91,9 @@ ruah does not yet guarantee:
 
 ## How It Works
 
-### 1. Worktree Isolation
+### 1. Workspace Isolation
 
-Each task gets its own git branch and worktree. Agents work in complete isolation — no interference, no stale reads, no merge surprises.
+Each task gets its own workspace. In `1.0.0-alpha`, that workspace is a Git worktree. The orchestration layer talks to a workspace provider instead of calling raw worktree operations directly.
 
 ```
 created → in-progress → done → merged
@@ -85,9 +102,9 @@ created → in-progress → done → merged
    └→ cancelled
 ```
 
-### 2. File Locks
+### 2. Claims And File Locks
 
-Lock scopes are checked at task creation. Overlapping patterns are rejected before any agent starts, using repo files when available:
+Claim scopes are checked at task creation. Overlapping patterns are rejected before any agent starts, using repo files when available:
 
 ```bash
 ruah task create auth  --files "src/auth/**"   # ✓ locked
@@ -95,7 +112,7 @@ ruah task create login --files "src/auth/**"   # ✗ conflict with auth
 ruah task create api   --files "src/api/**"    # ✓ no overlap
 ```
 
-### 3. Workflow DAG
+### 3. Workflow DAG And Contracts
 
 Markdown files define task graphs. Independent tasks run in parallel, dependent tasks wait.
 
@@ -130,7 +147,19 @@ Markdown files define task graphs. Independent tasks run in parallel, dependent 
     Write integration tests.
 ```
 
-The DAG is validated (cycle detection, missing refs) before execution. When `parallel: true` is set, ruah's smart planner analyzes file overlaps and decides per-stage: full parallel, parallel with modification contracts, or serial. Contracted stages are validated after execution so read-only changes and non-append edits fail before merge.
+The DAG is validated (cycle detection, missing refs) before execution. When `parallel: true` is set, `ruah` analyzes claims and overlaps and decides per-stage: full parallel, parallel with modification contracts, or serial. Contracted stages are validated after execution so read-only changes and non-append edits fail before merge.
+
+### 4. Artifacts And Engine State
+
+Successful tasks now persist artifacts into `.ruah/state.json`, including:
+
+- changed files
+- patch
+- commit metadata
+- claims used by the task
+- validation results
+
+`ruah status --json` exposes those artifacts and engine flags so higher-level tooling can inspect the orchestration state directly.
 
 ### Recovery Example
 
@@ -144,7 +173,7 @@ ruah workflow resume .ruah/workflows/feature.md
 
 `workflow explain` shows the blocking task and the exact takeover and resume commands to run.
 
-### 4. Subagent Spawning
+### 5. Subagent Spawning
 
 Any running agent can spawn child tasks. Children branch from the parent — not from main — and merge back into the parent first.
 
@@ -158,7 +187,7 @@ ruah task create auth-ui  --parent auth --files "src/auth/ui/**"  --executor aid
 
 Parent merge is blocked until all children are merged or cancelled. Each agent receives `RUAH_TASK`, `RUAH_PARENT_TASK`, `RUAH_WORKTREE`, `RUAH_FILES`, and `RUAH_ROOT` as environment variables.
 
-### 5. Executor Adapters
+### 6. Executor Adapters
 
 Built-in support for common AI agents.
 
@@ -171,7 +200,7 @@ Built-in support for common AI agents.
 | `script` | Any shell command |
 | `raw` | Explicit shell execution via `sh -lc` / `cmd /c` |
 
-### 6. Governance (crag)
+### 7. Governance (crag)
 
 Auto-detects `.claude/governance.md`. When found, gates run before every merge:
 
@@ -179,7 +208,7 @@ Auto-detects `.claude/governance.md`. When found, gates run before every merge:
 - **OPTIONAL** — warns, continues
 - **ADVISORY** — logs only
 
-### 7. AI Agent Setup
+### 8. AI Agent Setup
 
 Register ruah with all agents in one command:
 
@@ -228,13 +257,31 @@ ruah clean [--dry-run] [--force]
 
 Every command supports `--json` for programmatic consumption.
 
+## Engine Config
+
+`ruah` can read engine defaults from `.ruahrc` or `package.json#ruah`:
+
+```json
+{
+  "ruah": {
+    "workspaceBackend": "worktree",
+    "captureArtifacts": true,
+    "enableCompatibilityChecks": true,
+    "enablePlannerV2": true,
+    "executor": "claude-code"
+  }
+}
+```
+
+`worktree` is the shipped backend in `1.0.0-alpha`.
+
 ## Install
 
 ```bash
-npm install -g @levi-tc/ruah
+npm install -g @levi-tc/ruah@alpha
 ```
 
-Or use directly with `npx @levi-tc/ruah <command>`.
+Or use directly with `npx @levi-tc/ruah@alpha <command>`.
 
 **Requirements:** Node.js 18+, Git. Zero runtime dependencies.
 

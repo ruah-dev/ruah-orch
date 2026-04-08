@@ -118,16 +118,29 @@ export async function run(args: ParsedArgs): Promise<void> {
 	];
 
 	if (state) {
+		if (!state.artifacts) {
+			state.artifacts = {};
+		}
+		const artifacts = state.artifacts;
 		const staleTasks = Object.values(state.tasks).filter((task) => {
 			const isTerminal =
 				task.status === "merged" || task.status === "cancelled";
-			return !isTerminal && !activeWorktrees.has(task.worktree);
+			return (
+				!isTerminal && !!task.worktree && !activeWorktrees.has(task.worktree)
+			);
 		});
 		const orphanedLocks = Object.keys(state.locks).filter(
 			(taskName) => !state.tasks[taskName],
 		);
 		const snapshotGaps = Object.keys(state.locks).filter(
 			(taskName) => !state.lockSnapshots[taskName],
+		);
+		const artifactGaps = Object.values(state.tasks).filter(
+			(task) =>
+				task.status === "done" && !task.artifact && !artifacts[task.name],
+		);
+		const workspaceMetadataGaps = Object.values(state.tasks).filter(
+			(task) => !task.workspace && task.worktree,
 		);
 
 		checks.push(
@@ -150,6 +163,30 @@ export async function run(args: ParsedArgs): Promise<void> {
 				hint:
 					snapshotGaps.length > 0
 						? "Recreate those tasks to capture resolved lock snapshots."
+						: undefined,
+			},
+			{
+				name: "artifacts",
+				ok: artifactGaps.length === 0,
+				details:
+					artifactGaps.length === 0
+						? "all completed tasks have artifacts"
+						: `${artifactGaps.length} completed task(s) missing artifacts`,
+				hint:
+					artifactGaps.length > 0
+						? "Re-run or re-mark those tasks to capture engine artifacts."
+						: undefined,
+			},
+			{
+				name: "workspace-metadata",
+				ok: workspaceMetadataGaps.length === 0,
+				details:
+					workspaceMetadataGaps.length === 0
+						? "all tasks have canonical workspace metadata"
+						: `${workspaceMetadataGaps.length} task(s) still rely on legacy worktree fields`,
+				hint:
+					workspaceMetadataGaps.length > 0
+						? "Run any ruah command that rewrites state to migrate legacy task metadata."
 						: undefined,
 			},
 		);

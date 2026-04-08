@@ -19,7 +19,8 @@ export async function run(args: ParsedArgs): Promise<void> {
 		if (isTerminal) continue;
 
 		// Check if the worktree still exists
-		const worktreeExists = activeWorktrees.has(task.worktree);
+		const worktreeExists =
+			!!task.worktree && activeWorktrees.has(task.worktree);
 
 		if (!worktreeExists) {
 			staleTasks.push(name);

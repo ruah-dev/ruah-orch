@@ -4,6 +4,7 @@ import { mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
+import { claimSetFromFiles } from "../src/core/claims.js";
 import type { Task } from "../src/core/state.js";
 import { loadState, releaseLocks, saveState } from "../src/core/state.js";
 
@@ -20,6 +21,17 @@ function makeTask(overrides: Partial<Task> & { name: string }): Task {
 		branch: `ruah/${overrides.name}`,
 		worktree: `/tmp/worktrees/${overrides.name}`,
 		files: [],
+		workspace: {
+			id: overrides.name,
+			kind: "worktree",
+			root: `/tmp/worktrees/${overrides.name}`,
+			baseRef: "main",
+			headRef: `ruah/${overrides.name}`,
+			metadata: { branchName: `ruah/${overrides.name}` },
+		},
+		claims: claimSetFromFiles([]),
+		artifact: null,
+		integration: { status: "unknown", conflictsWith: [] },
 		lockMode: "write",
 		executor: null,
 		prompt: null,

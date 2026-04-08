@@ -12,7 +12,11 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import type { TaskStatus } from "../utils/format.js";
+import type { TaskArtifact } from "./artifact.js";
+import { type ClaimSet, claimSetFromFiles, claimSetToFiles } from "./claims.js";
 import { listRepoFiles } from "./git.js";
+import { migrateStateShape } from "./state-migrations.js";
+import type { WorkspaceHandle } from "./workspace.js";
 
 export interface WorkflowRef {
 	name: string;
@@ -27,6 +31,14 @@ export interface Task {
 	name: string;
 	status: TaskStatus;
 	baseBranch: string;
+	workspace?: WorkspaceHandle | null;
+	claims?: ClaimSet | null;
+	artifact?: TaskArtifact | null;
+	integration?: {
+		status: "unknown" | "clean" | "conflict" | "stale";
+		conflictsWith: string[];
+		lastCheckedAt?: string;
+	} | null;
 	branch: string;
 	worktree: string;
 	files: string[];
@@ -57,6 +69,7 @@ export interface RuahState {
 	revision: number;
 	baseBranch: string;
 	tasks: Record<string, Task>;
+	artifacts: Record<string, TaskArtifact>;
 	locks: Record<string, string[]>;
 	/** Per-task lock mode: "read" or "write" (absent = "write" for backward compat) */
 	lockModes: Record<string, LockMode>;
@@ -88,6 +101,7 @@ function defaultState(): RuahState {
 		revision: 0,
 		baseBranch: "main",
 		tasks: {},
+		artifacts: {},
 		locks: {},
 		lockModes: {},
 		lockSnapshots: {},
@@ -115,8 +129,8 @@ function sleep(ms: number): void {
 	Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-function parseState(raw: string): RuahState {
-	const parsed = JSON.parse(raw) as Partial<RuahState>;
+function parseState(raw: string, root: string): RuahState {
+	const parsed = migrateStateShape(JSON.parse(raw) as Partial<RuahState>, root);
 	const tasks = parsed.tasks || {};
 	// Backfill fields for tasks created before dependency/lockMode tracking
 	for (const task of Object.values(tasks)) {
@@ -126,12 +140,35 @@ function parseState(raw: string): RuahState {
 		if (!task.lockMode) {
 			(task as Task).lockMode = "write";
 		}
+		if (!task.claims) {
+			task.claims = claimSetFromFiles(task.files || [], task.lockMode);
+		}
+		if (!task.files) {
+			task.files = claimSetToFiles(task.claims);
+		}
+		if (task.workspace) {
+			task.worktree = task.workspace.root;
+			task.branch =
+				task.workspace.metadata?.branchName ||
+				task.workspace.headRef ||
+				task.branch;
+		}
+		if (!task.integration) {
+			task.integration = {
+				status: "unknown",
+				conflictsWith: [],
+			};
+		}
+		if (!task.artifact && parsed.artifacts?.[task.name]) {
+			task.artifact = parsed.artifacts[task.name];
+		}
 	}
 	return {
 		...defaultState(),
 		...parsed,
 		revision: typeof parsed.revision === "number" ? parsed.revision : 0,
 		tasks,
+		artifacts: parsed.artifacts || {},
 		locks: parsed.locks || {},
 		lockModes: parsed.lockModes || {},
 		lockSnapshots: parsed.lockSnapshots || {},
@@ -191,7 +228,7 @@ export function loadState(root: string): RuahState {
 		return defaultState();
 	}
 	const raw = readFileSync(file, "utf-8");
-	return parseState(raw);
+	return parseState(raw, root);
 }
 
 export function saveState(root: string, state: RuahState): void {
@@ -201,7 +238,7 @@ export function saveState(root: string, state: RuahState): void {
 
 	try {
 		const current = existsSync(file)
-			? parseState(readFileSync(file, "utf-8"))
+			? parseState(readFileSync(file, "utf-8"), root)
 			: defaultState();
 		if (state.revision !== current.revision) {
 			throw new Error(
@@ -209,8 +246,11 @@ export function saveState(root: string, state: RuahState): void {
 			);
 		}
 
+		migrateStateShape(state, root);
+
 		const nextState: RuahState = {
 			...state,
+			version: 2,
 			revision: current.revision + 1,
 		};
 		const tmp = `${file}.${randomBytes(4).toString("hex")}.tmp`;

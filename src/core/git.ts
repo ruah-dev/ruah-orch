@@ -7,6 +7,12 @@ interface GitOptions {
 	ignoreError?: boolean;
 }
 
+export interface GitCommandResult {
+	stdout: string;
+	stderr: string;
+	status: number | null;
+}
+
 export interface WorktreeInfo {
 	worktreePath: string;
 	branchName: string;
@@ -27,20 +33,41 @@ export interface WorktreeEntry {
 }
 
 function git(cmd: string, opts: GitOptions = {}): string {
-	const { cwd, silent, ignoreError } = opts;
+	const result = runGitCommand(cmd, opts);
+	if (result.status === 0) return result.stdout.trim();
+	if (opts.ignoreError) return "";
+	const stderr = result.stderr.trim();
+	throw new Error(
+		`git ${cmd.split(" ")[0]} failed: ${stderr || `exit code ${result.status ?? "unknown"}`}`,
+	);
+}
+
+export function runGitCommand(
+	cmd: string,
+	opts: GitOptions = {},
+): GitCommandResult {
+	const { cwd, silent } = opts;
 	try {
 		const result = execSync(`git ${cmd}`, {
 			encoding: "utf-8",
 			cwd: cwd || process.cwd(),
 			stdio: silent ? "pipe" : ["pipe", "pipe", "pipe"],
 		});
-		return result.trim();
+		return {
+			stdout: typeof result === "string" ? result : String(result),
+			stderr: "",
+			status: 0,
+		};
 	} catch (err: unknown) {
-		if (ignoreError) return "";
-		const stderr =
-			(err as { stderr?: string })?.stderr?.trim() ||
-			(err instanceof Error ? err.message : String(err));
-		throw new Error(`git ${cmd.split(" ")[0]} failed: ${stderr}`);
+		const stdout = (err as { stdout?: string })?.stdout?.toString?.() || "";
+		const stderr = (err as { stderr?: string })?.stderr?.toString?.() || "";
+		const rawStatus = (err as { status?: number }).status;
+		const status = typeof rawStatus === "number" ? rawStatus : null;
+		return {
+			stdout,
+			stderr,
+			status,
+		};
 	}
 }
 
@@ -65,8 +92,20 @@ export function getCurrentBranch(cwd?: string): string {
 	return git("rev-parse --abbrev-ref HEAD", { cwd, silent: true });
 }
 
+export function getCurrentHead(cwd?: string): string {
+	return git("rev-parse HEAD", { cwd, silent: true });
+}
+
 export function getRepoRoot(cwd?: string): string {
 	return git("rev-parse --show-toplevel", { cwd, silent: true });
+}
+
+export function getCommitSha(ref: string, cwd?: string): string | null {
+	try {
+		return git(`rev-parse ${ref}`, { cwd, silent: true });
+	} catch {
+		return null;
+	}
 }
 
 export function branchExists(name: string, cwd?: string): boolean {
@@ -144,7 +183,15 @@ export function mergeWorktree(
 ): MergeResult {
 	const safe = sanitizeName(taskName);
 	const branchName = `ruah/${safe}`;
+	return mergeBranchIntoTarget(branchName, baseBranch, repoRoot, opts);
+}
 
+export function mergeBranchIntoTarget(
+	branchName: string,
+	baseBranch: string,
+	repoRoot: string,
+	opts: MergeOptions = {},
+): MergeResult {
 	// For subtask merges, the target branch is already checked out in the
 	// parent's worktree. Merge from there instead of the repo root.
 	const mergeCwd = opts.parentWorktree || repoRoot;
@@ -156,7 +203,7 @@ export function mergeWorktree(
 	// else: parentWorktree already has the target branch checked out
 
 	try {
-		git(`merge ${branchName} --no-ff -m "ruah: merge ${taskName}"`, {
+		git(`merge ${branchName} --no-ff -m "ruah: merge ${branchName}"`, {
 			cwd: mergeCwd,
 			silent: true,
 		});
@@ -181,6 +228,10 @@ export function mergeWorktree(
 
 		return { success: false, conflicts };
 	}
+}
+
+export function getCurrentCommit(cwd?: string): string {
+	return git("rev-parse HEAD", { cwd, silent: true });
 }
 
 export function getWorktreeDiff(
@@ -294,6 +345,32 @@ export function getDiffPatchAgainstBase(
 		cwd,
 		silent: true,
 	});
+}
+
+export function getWorkspacePatchAgainstBase(
+	baseRef: string,
+	cwd: string,
+): string {
+	return git(`diff --binary ${baseRef} --`, {
+		cwd,
+		silent: true,
+		ignoreError: true,
+	});
+}
+
+export function getDiffPatchBetweenPaths(
+	pathA: string,
+	pathB: string,
+	cwd: string,
+): string {
+	return runGitCommand(
+		`diff --no-index --binary --unified=0 -- ${shQuote(pathA)} ${shQuote(pathB)}`,
+		{
+			cwd,
+			silent: true,
+			ignoreError: true,
+		},
+	).stdout.trim();
 }
 
 export function readFileAtRef(

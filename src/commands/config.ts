@@ -9,22 +9,12 @@ export async function run(_args: ParsedArgs): Promise<void> {
 
 	log(heading("Configuration"));
 
-	const entries = Object.entries(config);
-	if (entries.length === 0) {
-		logInfo(
-			'No configuration found. Create .ruahrc or add "ruah" to package.json.',
-		);
-		logInfo("");
-		logInfo("Example .ruahrc:");
-		logInfo("  {");
-		logInfo('    "baseBranch": "main",');
-		logInfo('    "executor": "claude-code",');
-		logInfo('    "timeout": 300');
-		logInfo("  }");
-		return;
-	}
-
-	for (const [key, value] of entries) {
+	for (const [key, value] of Object.entries(config)) {
 		log(`  ${key}: ${JSON.stringify(value)}`);
 	}
+
+	logInfo("");
+	logInfo(
+		"Config source precedence: .ruahrc, then package.json#ruah, then defaults.",
+	);
 }

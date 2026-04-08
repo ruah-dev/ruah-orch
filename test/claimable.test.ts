@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { claimSetFromFiles } from "../src/core/claims.js";
 import type { RuahState, Task } from "../src/core/state.js";
 import { getClaimableTasks, isTaskClaimable } from "../src/core/state.js";
 
@@ -10,6 +11,17 @@ function makeTask(overrides: Partial<Task> & { name: string }): Task {
 		branch: `ruah/${overrides.name}`,
 		worktree: `/tmp/worktrees/${overrides.name}`,
 		files: [],
+		workspace: {
+			id: overrides.name,
+			kind: "worktree",
+			root: `/tmp/worktrees/${overrides.name}`,
+			baseRef: "main",
+			headRef: `ruah/${overrides.name}`,
+			metadata: { branchName: `ruah/${overrides.name}` },
+		},
+		claims: claimSetFromFiles([]),
+		artifact: null,
+		integration: { status: "unknown", conflictsWith: [] },
 		lockMode: "write",
 		executor: null,
 		prompt: null,
@@ -26,10 +38,11 @@ function makeTask(overrides: Partial<Task> & { name: string }): Task {
 
 function makeState(tasks: Task[]): RuahState {
 	return {
-		version: 1,
+		version: 2,
 		revision: 0,
 		baseBranch: "main",
 		tasks: Object.fromEntries(tasks.map((t) => [t.name, t])),
+		artifacts: {},
 		locks: {},
 		lockModes: {},
 		lockSnapshots: {},

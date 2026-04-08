@@ -1,4 +1,7 @@
 import type { ParsedArgs } from "../cli.js";
+import { artifactPresent } from "../core/artifact.js";
+import { claimSetToFiles } from "../core/claims.js";
+import { loadConfig } from "../core/config.js";
 import { getCurrentBranch, getRepoRoot, listWorktrees } from "../core/git.js";
 import {
 	detectArhy,
@@ -56,6 +59,7 @@ function summarizeWorkflows(tasks: Task[]): WorkflowSummary[] {
 export async function run(args: ParsedArgs): Promise<void> {
 	const root = getRepoRoot();
 	const json = args.flags.json;
+	const config = loadConfig(root);
 
 	const state = loadState(root);
 	const reconciliation = reconcileStateWithGit(root, state);
@@ -81,6 +85,13 @@ export async function run(args: ParsedArgs): Promise<void> {
 					cragDetected: crag.detected,
 					cragPath: crag.path,
 					arhyDetected: arhy.detected,
+					engine: {
+						workspaceBackend: config.workspaceBackend || "worktree",
+						captureArtifacts: config.captureArtifacts ?? true,
+						enableCompatibilityChecks:
+							config.enableCompatibilityChecks ?? false,
+						enablePlannerV2: config.enablePlannerV2 ?? false,
+					},
 					taskCounts: {
 						total: tasks.length,
 						created,
@@ -89,7 +100,20 @@ export async function run(args: ParsedArgs): Promise<void> {
 						merged,
 						failed,
 					},
-					tasks: state.tasks,
+					tasks: Object.fromEntries(
+						Object.entries(state.tasks).map(([name, task]) => [
+							name,
+							{
+								...task,
+								workspace: task.workspace || null,
+								claims: task.claims || null,
+								artifactPresent: artifactPresent(task.artifact),
+								integrationStatus: task.integration?.status || "unknown",
+								files: task.files || claimSetToFiles(task.claims),
+							},
+						]),
+					),
+					artifacts: state.artifacts,
 					locks: state.locks,
 					workflows,
 					worktrees: worktrees.map((w) => ({

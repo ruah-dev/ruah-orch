@@ -47,6 +47,7 @@ export function reconcileStateWithGit(
 		}
 
 		if (
+			!task.branch ||
 			!branchExists(task.branch, root) ||
 			!branchExists(task.baseBranch, root)
 		) {

@@ -4,6 +4,7 @@ import { mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
+import { claimSetFromFiles } from "../src/core/claims.js";
 import type { Task } from "../src/core/state.js";
 import { addHistoryEntry, loadState, saveState } from "../src/core/state.js";
 
@@ -21,6 +22,17 @@ function makeFailedTask(name: string, root: string): Task {
 		branch: `ruah/${name}`,
 		worktree: join(root, ".ruah", "worktrees", name),
 		files: ["src/auth/**"],
+		workspace: {
+			id: name,
+			kind: "worktree",
+			root: join(root, ".ruah", "worktrees", name),
+			baseRef: "main",
+			headRef: `ruah/${name}`,
+			metadata: { branchName: `ruah/${name}` },
+		},
+		claims: claimSetFromFiles(["src/auth/**"]),
+		artifact: null,
+		integration: { status: "unknown", conflictsWith: [] },
 		lockMode: "write",
 		executor: "script",
 		prompt: "echo hello",

@@ -1,6 +1,8 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { ParsedArgs } from "../cli.js";
+import { buildTaskArtifact, type TaskArtifact } from "../core/artifact.js";
+import { claimSetFromFiles } from "../core/claims.js";
 import { loadConfig } from "../core/config.js";
 import {
 	formatContractViolationReport,
@@ -8,13 +10,11 @@ import {
 } from "../core/contract-validator.js";
 import type { TaskDef } from "../core/executor.js";
 import { executeTask } from "../core/executor.js";
+import { getCurrentBranch, getRepoRoot } from "../core/git.js";
 import {
-	createWorktree,
-	getCurrentBranch,
-	getRepoRoot,
-	mergeWorktree,
-	removeWorktree,
-} from "../core/git.js";
+	compareArtifacts,
+	compareArtifactToBase,
+} from "../core/integration.js";
 import {
 	detectCrag,
 	readCragGovernance,
@@ -37,6 +37,10 @@ import {
 	parseWorkflow,
 	validateDAG,
 } from "../core/workflow.js";
+import {
+	getWorkspaceProvider,
+	type WorkspaceHandle,
+} from "../core/workspace.js";
 import {
 	formatExecutionPlan,
 	heading,
@@ -75,7 +79,7 @@ export async function run(args: ParsedArgs): Promise<void> {
 
 interface StageTask {
 	def: WorkflowTask;
-	worktreePath: string;
+	workspace: WorkspaceHandle;
 }
 
 interface ExecResult {
@@ -106,7 +110,12 @@ async function workflowRun(args: ParsedArgs, root: string): Promise<void> {
 
 	const plan = getExecutionPlan(workflow.tasks);
 	const state = loadState(root);
+	if (!state.artifacts) {
+		state.artifacts = {};
+	}
+	const artifacts = state.artifacts;
 	const config = loadConfig(root);
+	const provider = getWorkspaceProvider();
 	const baseBranch =
 		workflow.config.base || config.baseBranch || state.baseBranch;
 	const strictLocks =
@@ -185,7 +194,7 @@ async function workflowRun(args: ParsedArgs, root: string): Promise<void> {
 				: [stage];
 
 		for (const substage of stageOrder) {
-			// Create worktrees and check locks
+			// Create workspaces and check locks
 			const stageTasks: StageTask[] = [];
 			for (const taskDef of substage) {
 				if (taskDef.files.length > 0) {
@@ -214,17 +223,24 @@ async function workflowRun(args: ParsedArgs, root: string): Promise<void> {
 					}
 				}
 
-				const { worktreePath, branchName } = createWorktree(
-					taskDef.name,
-					baseBranch,
-					root,
-				);
+				const workspace = provider.create(taskDef.name, baseBranch, root);
+				const branchName =
+					workspace.metadata?.branchName ||
+					workspace.headRef ||
+					`ruah/${taskDef.name}`;
 				state.tasks[taskDef.name] = {
 					name: taskDef.name,
 					status: "in-progress",
 					baseBranch,
+					workspace,
+					claims: claimSetFromFiles(taskDef.files),
+					artifact: null,
+					integration: {
+						status: "unknown",
+						conflictsWith: [],
+					},
 					branch: branchName,
-					worktree: worktreePath,
+					worktree: workspace.root,
 					files: taskDef.files,
 					lockMode: "write",
 					executor: taskDef.executor,
@@ -246,12 +262,12 @@ async function workflowRun(args: ParsedArgs, root: string): Promise<void> {
 				addHistoryEntry(state, "task.created", { task: taskDef.name });
 				saveState(root, state);
 
-				stageTasks.push({ def: taskDef, worktreePath });
+				stageTasks.push({ def: taskDef, workspace });
 			}
 
 			// Build TaskDef with contract (if planner assigned one)
 			const execPromises = stageTasks.map(
-				async ({ def, worktreePath }): Promise<ExecResult> => {
+				async ({ def, workspace }): Promise<ExecResult> => {
 					logInfo(`  Running: ${def.name} (${def.executor || "script"})`);
 
 					// Inject contract from smart planner
@@ -261,15 +277,19 @@ async function workflowRun(args: ParsedArgs, root: string): Promise<void> {
 						contract,
 					};
 
-					const result = await executeTask(taskDefWithContract, worktreePath, {
-						silent: true,
-					});
+					const result = await executeTask(
+						taskDefWithContract,
+						workspace.root,
+						{
+							silent: true,
+						},
+					);
 
 					let contractValidation = null;
 					if (result.success && contract) {
 						contractValidation = validateContractChanges(
 							contract,
-							worktreePath,
+							workspace.root,
 							root,
 							baseBranch,
 						);
@@ -279,8 +299,28 @@ async function workflowRun(args: ParsedArgs, root: string): Promise<void> {
 						result.success &&
 						(!contractValidation || contractValidation.valid)
 					) {
-						state.tasks[def.name].status = "done";
-						state.tasks[def.name].completedAt = new Date().toISOString();
+						const task = state.tasks[def.name];
+						task.status = "done";
+						task.completedAt = new Date().toISOString();
+						task.workspace = {
+							...workspace,
+							headRef: provider.currentHead(workspace, root),
+						};
+						if (config.captureArtifacts !== false) {
+							task.artifact = buildTaskArtifact(provider, {
+								taskName: def.name,
+								workspace: task.workspace,
+								baseRef: baseBranch,
+								repoRoot: root,
+								claims: task.claims,
+								validation: {
+									executorSuccess: true,
+									contractSuccess:
+										!contractValidation || contractValidation.valid,
+								},
+							});
+							artifacts[def.name] = task.artifact;
+						}
 						addHistoryEntry(state, "task.done", { task: def.name });
 						logSuccess(`  ${def.name}: completed`);
 					} else {
@@ -347,7 +387,17 @@ async function workflowRun(args: ParsedArgs, root: string): Promise<void> {
 						continue;
 					}
 					if (task) {
-						removeWorktree(def.name, root);
+						provider.remove(
+							task.workspace || {
+								id: task.name,
+								kind: "worktree",
+								root: task.worktree || "",
+								baseRef: task.baseBranch,
+								headRef: task.branch,
+								metadata: task.branch ? { branchName: task.branch } : undefined,
+							},
+							root,
+						);
 						releaseLocks(state, def.name);
 						task.status = "cancelled";
 						logWarn(`  Cleaned up: ${def.name}`);
@@ -358,10 +408,67 @@ async function workflowRun(args: ParsedArgs, root: string): Promise<void> {
 				break;
 			}
 
+			if (config.enableCompatibilityChecks) {
+				const completedArtifacts = stageTasks
+					.map(({ def }) => state.tasks[def.name]?.artifact)
+					.filter((artifact): artifact is TaskArtifact => !!artifact);
+
+				for (const artifact of completedArtifacts) {
+					const baseCompatibility = compareArtifactToBase(
+						artifact,
+						baseBranch,
+						root,
+					);
+					const task = state.tasks[artifact.taskName];
+					task.integration = {
+						status: baseCompatibility.staleBase
+							? "stale"
+							: baseCompatibility.clean
+								? "clean"
+								: "conflict",
+						conflictsWith: baseCompatibility.conflictingFiles,
+						lastCheckedAt: baseCompatibility.checkedAt,
+					};
+				}
+
+				for (let left = 0; left < completedArtifacts.length; left++) {
+					for (
+						let right = left + 1;
+						right < completedArtifacts.length;
+						right++
+					) {
+						const compatibility = compareArtifacts(
+							completedArtifacts[left],
+							completedArtifacts[right],
+							root,
+						);
+						if (!compatibility.clean) {
+							const leftTask = state.tasks[completedArtifacts[left].taskName];
+							const rightTask = state.tasks[completedArtifacts[right].taskName];
+							leftTask.integration = {
+								status: "conflict",
+								conflictsWith: compatibility.conflictingFiles,
+								lastCheckedAt: compatibility.checkedAt,
+							};
+							rightTask.integration = {
+								status: "conflict",
+								conflictsWith: compatibility.conflictingFiles,
+								lastCheckedAt: compatibility.checkedAt,
+							};
+							saveState(root, state);
+							logError(
+								`Compatibility check failed for "${leftTask.name}" and "${rightTask.name}" — ${compatibility.conflictingFiles.join(", ")}`,
+							);
+							process.exit(1);
+						}
+					}
+				}
+			}
+
 			// Run crag gates if available
 			if (governance) {
-				for (const { def, worktreePath } of stageTasks) {
-					const gateResult = runGates(governance, worktreePath);
+				for (const { def, workspace } of stageTasks) {
+					const gateResult = runGates(governance, workspace.root);
 					if (!gateResult.passed) {
 						logError(`Gate failed for "${def.name}". Halting workflow.`);
 						process.exit(1);
@@ -371,8 +478,8 @@ async function workflowRun(args: ParsedArgs, root: string): Promise<void> {
 			}
 
 			// Merge each task
-			for (const { def } of stageTasks) {
-				const mergeResult = mergeWorktree(def.name, baseBranch, root);
+			for (const { def, workspace } of stageTasks) {
+				const mergeResult = provider.merge(workspace, baseBranch, root);
 				if (mergeResult.success) {
 					const mergedAt = new Date().toISOString();
 					addHistoryEntry(state, "task.merged", {
@@ -380,7 +487,7 @@ async function workflowRun(args: ParsedArgs, root: string): Promise<void> {
 						target: baseBranch,
 						mergedAt,
 					});
-					removeWorktree(def.name, root);
+					provider.remove(workspace, root);
 					removeTask(state, def.name);
 					logSuccess(`  ${def.name}: merged`);
 				} else {

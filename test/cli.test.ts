@@ -149,6 +149,8 @@ describe("CLI integration", () => {
 		const out = ruah("status --json", repo);
 		const parsed = JSON.parse(out);
 		assert.equal(typeof parsed.cragDetected, "boolean");
+		assert.equal(parsed.engine.workspaceBackend, "worktree");
+		assert.equal(typeof parsed.engine.captureArtifacts, "boolean");
 		assert.ok(parsed.baseBranch);
 		assert.ok(parsed.taskCounts);
 	});
