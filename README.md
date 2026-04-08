@@ -277,11 +277,26 @@ Every command supports `--json` for programmatic consumption.
 
 ## Install
 
+Stable release:
+
+```bash
+npm install -g @levi-tc/ruah
+```
+
+Alpha release:
+
 ```bash
 npm install -g @levi-tc/ruah@alpha
 ```
 
-Or use directly with `npx @levi-tc/ruah@alpha <command>`.
+You can also run either channel without installing:
+
+```bash
+npx @levi-tc/ruah <command>
+npx @levi-tc/ruah@alpha <command>
+```
+
+npm shows the `latest` dist-tag in the package header. That means the npm page will continue to show the current stable release at the top while the alpha line remains available through `@alpha`.
 
 **Requirements:** Node.js 18+, Git. Zero runtime dependencies.
 
