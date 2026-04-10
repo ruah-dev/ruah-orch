@@ -67,6 +67,49 @@ describe("executor", () => {
 		assert.notEqual(result.exitCode, 0);
 	});
 
+	it("executeTask streams prefixed debug output", async () => {
+		const task = {
+			name: "debug-task",
+			executor: "script",
+			prompt:
+				"node -e \"process.stdout.write('hello\\\\n');process.stderr.write('warn\\\\n')\"",
+		};
+		const stdoutChunks: string[] = [];
+		const stderrChunks: string[] = [];
+		const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+		const originalStderrWrite = process.stderr.write.bind(process.stderr);
+
+		process.stdout.write = ((chunk: string | Uint8Array) => {
+			stdoutChunks.push(String(chunk));
+			return true;
+		}) as typeof process.stdout.write;
+		process.stderr.write = ((chunk: string | Uint8Array) => {
+			stderrChunks.push(String(chunk));
+			return true;
+		}) as typeof process.stderr.write;
+
+		try {
+			const result = await executeTask(task, dir, {
+				debug: true,
+				silent: true,
+			});
+			assert.equal(result.success, true);
+		} finally {
+			process.stdout.write = originalStdoutWrite;
+			process.stderr.write = originalStderrWrite;
+		}
+
+		assert.ok(
+			stdoutChunks.some((chunk) => chunk.includes("Spawn debug-task: node -e")),
+		);
+		assert.ok(
+			stdoutChunks.some((chunk) => chunk.includes("[debug-task stdout] hello")),
+		);
+		assert.ok(
+			stderrChunks.some((chunk) => chunk.includes("[debug-task stderr] warn")),
+		);
+	});
+
 	it("executeTask rejects unknown executors", async () => {
 		const task = { name: "test", executor: "echo", prompt: "hello" };
 		const result = await executeTask(task, dir, { silent: true });

@@ -9,3 +9,4 @@ dist-test/
 .claude/.gates-passed
 .claude/.last-audit
 *.tgz
+reddit/

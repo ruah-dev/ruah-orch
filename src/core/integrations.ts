@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 // --- crag Integration ---
@@ -34,27 +34,6 @@ export interface GateResult {
 	passed: boolean;
 	results: GateRunResult[];
 	failedGate?: GateRunResult;
-}
-
-export interface ArhyDetection {
-	detected: boolean;
-	files: string[];
-}
-
-export interface ArhyField {
-	name: string;
-	type: string;
-}
-
-export interface ArhyEntity {
-	name: string;
-	fields: ArhyField[];
-	actions: string[];
-	events: string[];
-}
-
-export interface ArhyContract {
-	entities: ArhyEntity[];
 }
 
 const GOVERNANCE_PATHS = [".claude/governance.md", "governance.md"];
@@ -180,103 +159,4 @@ export function runGates(
 	}
 
 	return { passed, results };
-}
-
-// --- arhy Integration ---
-
-export function detectArhy(root: string): ArhyDetection {
-	try {
-		const files = readdirSync(root).filter((f) => f.endsWith(".arhy"));
-		if (files.length > 0) {
-			return { detected: true, files: files.map((f) => join(root, f)) };
-		}
-	} catch {
-		// ignore
-	}
-	return { detected: false, files: [] };
-}
-
-export function readArhyContract(filePath: string): ArhyContract | null {
-	if (!existsSync(filePath)) return null;
-
-	const content = readFileSync(filePath, "utf-8");
-	return parseArhyContract(content);
-}
-
-export function parseArhyContract(content: string): ArhyContract {
-	const entities: ArhyEntity[] = [];
-	let current: ArhyEntity | null = null;
-
-	for (const line of content.split("\n")) {
-		const trimmed = line.trim();
-		if (!trimmed || trimmed.startsWith("#")) continue;
-
-		// Entity definition
-		const entityMatch = trimmed.match(/^entity\s+(\w+)\s*\{?\s*$/);
-		if (entityMatch) {
-			if (current) entities.push(current);
-			current = {
-				name: entityMatch[1],
-				fields: [],
-				actions: [],
-				events: [],
-			};
-			continue;
-		}
-
-		// Closing brace
-		if (trimmed === "}") {
-			if (current) entities.push(current);
-			current = null;
-			continue;
-		}
-
-		if (!current) continue;
-
-		// Action
-		const actionMatch = trimmed.match(/^action\s+(\w+)/);
-		if (actionMatch) {
-			current.actions.push(actionMatch[1]);
-			continue;
-		}
-
-		// Event
-		const eventMatch = trimmed.match(/^event\s+(\w+)/);
-		if (eventMatch) {
-			current.events.push(eventMatch[1]);
-			continue;
-		}
-
-		// Field (simple: name: type)
-		const fieldMatch = trimmed.match(/^(\w+)\s*:\s*(.+)$/);
-		if (fieldMatch) {
-			current.fields.push({
-				name: fieldMatch[1],
-				type: fieldMatch[2].trim(),
-			});
-		}
-	}
-
-	if (current) entities.push(current);
-	return { entities };
-}
-
-export function inferFileBoundaries(
-	contract: ArhyContract | null,
-): Record<string, string[]> {
-	if (!contract?.entities) return {};
-
-	const boundaries: Record<string, string[]> = {};
-	for (const entity of contract.entities) {
-		const lower = entity.name.toLowerCase();
-		const plural = lower.endsWith("s") ? lower : `${lower}s`;
-		boundaries[entity.name] = [
-			`src/${lower}/**`,
-			`src/${plural}/**`,
-			`src/models/${lower}.*`,
-			`src/controllers/${lower}.*`,
-			`src/routes/${lower}.*`,
-		];
-	}
-	return boundaries;
 }

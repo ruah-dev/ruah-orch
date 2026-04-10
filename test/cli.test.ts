@@ -495,4 +495,40 @@ describe("CLI integration", () => {
 		assert.ok(out.includes("batch 1/2 (capped at 2 parallel)"));
 		assert.ok(out.includes("batch 2/2 (capped at 2 parallel)"));
 	});
+
+	it("workflow run --debug-exec streams prefixed task output", () => {
+		ruah("init", repo);
+		const workflowPath = join(repo, ".ruah", "workflows", "debug-exec.md");
+		writeFileSync(
+			workflowPath,
+			`# Workflow: Debug Exec
+
+## Config
+- base: main
+- parallel: true
+
+## Tasks
+
+### one
+- files: src/one.ts
+- executor: script
+- depends: []
+- prompt: node -e "process.stdout.write('one-ready\\\\n')"
+
+### two
+- files: src/two.ts
+- executor: script
+- depends: []
+- prompt: node -e "process.stdout.write('two-ready\\\\n')"
+`,
+			"utf-8",
+		);
+
+		const out = ruah(`workflow run ${workflowPath} --debug-exec`, repo);
+		assert.ok(out.includes("Execution debug enabled"));
+		assert.ok(out.includes("Spawn one: node -e"));
+		assert.ok(out.includes("Spawn two: node -e"));
+		assert.ok(out.includes("[one stdout] one-ready"));
+		assert.ok(out.includes("[two stdout] two-ready"));
+	});
 });

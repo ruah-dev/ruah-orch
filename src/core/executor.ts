@@ -1,6 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { logInfo } from "../utils/format.js";
 import { autoCommitChanges } from "./git.js";
 import type { FileContract } from "./planner.js";
 import { renderContractMarkdown } from "./planner.js";
@@ -35,6 +36,7 @@ export interface TaskDef {
 export interface ExecuteOptions {
 	dryRun?: boolean;
 	silent?: boolean;
+	debug?: boolean;
 }
 
 export interface ExecuteResult {
@@ -46,6 +48,51 @@ export interface ExecuteResult {
 	command?: string;
 	dryRun?: boolean;
 	autoCommitted?: boolean;
+}
+
+function isExecutionDebugEnabled(opts: ExecuteOptions): boolean {
+	if (opts.debug === true) return true;
+	const flag = process.env.RUAH_DEBUG?.trim().toLowerCase();
+	return flag === "1" || flag === "true" || flag === "yes";
+}
+
+function formatCommandPart(part: string): string {
+	return /^[A-Za-z0-9_./:@%+=,-]+$/.test(part) ? part : JSON.stringify(part);
+}
+
+function formatCommand(command: string, args: string[]): string {
+	return [command, ...args].map(formatCommandPart).join(" ");
+}
+
+function createPrefixedWriter(
+	prefix: string,
+	write: (chunk: string) => boolean,
+): {
+	push: (chunk: Buffer | string) => void;
+	flush: () => void;
+} {
+	let buffer = "";
+
+	function emitLine(line: string): void {
+		write(`${prefix}${line}\n`);
+	}
+
+	return {
+		push(chunk) {
+			buffer += chunk.toString();
+			let newlineIndex = buffer.indexOf("\n");
+			while (newlineIndex !== -1) {
+				emitLine(buffer.slice(0, newlineIndex));
+				buffer = buffer.slice(newlineIndex + 1);
+				newlineIndex = buffer.indexOf("\n");
+			}
+		},
+		flush() {
+			if (!buffer) return;
+			emitLine(buffer);
+			buffer = "";
+		},
+	};
 }
 
 function parseCommandLine(input: string): string[] {
@@ -281,6 +328,7 @@ export function executeTask(
 	const { dryRun, silent } = opts;
 	const prompt = taskDef.prompt || "";
 	const executorName = taskDef.executor || "script";
+	const debugEnabled = isExecutionDebugEnabled(opts);
 
 	// Resolve adapter
 	const adapter = ADAPTERS[executorName];
@@ -309,6 +357,7 @@ export function executeTask(
 			error: `Unknown executor: ${executorName}. Use a supported executor, "script", or explicit "raw".`,
 		});
 	}
+	const renderedCommand = formatCommand(cmd, args);
 
 	// Write task file with context and subagent instructions
 	const taskFile = join(worktreePath, ".ruah-task.md");
@@ -355,7 +404,7 @@ Environment variables available:
 	if (dryRun) {
 		return Promise.resolve({
 			success: true,
-			command: `${cmd} ${args.join(" ")}`,
+			command: renderedCommand,
 			dryRun: true,
 		});
 	}
@@ -381,34 +430,66 @@ Environment variables available:
 			taskEnv.RUAH_FILES = taskDef.files.join(",");
 		}
 
+		if (debugEnabled) {
+			logInfo(`Spawn ${taskDef.name}: ${renderedCommand}`);
+			logInfo(`Worktree ${taskDef.name}: ${worktreePath}`);
+		}
+
+		const captureOutput = silent || debugEnabled;
+
 		const child = spawn(cmd, args, {
 			cwd: worktreePath,
 			env: taskEnv,
-			stdio: silent ? "pipe" : "inherit",
+			stdio: captureOutput ? "pipe" : "inherit",
 			shell: useShell,
 		});
 
 		let stdout = "";
 		let stderr = "";
+		const stdoutWriter = debugEnabled
+			? createPrefixedWriter(
+					`[${taskDef.name} stdout] `,
+					process.stdout.write.bind(process.stdout),
+				)
+			: null;
+		const stderrWriter = debugEnabled
+			? createPrefixedWriter(
+					`[${taskDef.name} stderr] `,
+					process.stderr.write.bind(process.stderr),
+				)
+			: null;
 
-		if (silent && child.stdout) {
+		child.on("spawn", () => {
+			if (debugEnabled) {
+				logInfo(`PID ${taskDef.name}: ${child.pid ?? "unknown"}`);
+			}
+		});
+
+		if (captureOutput && child.stdout) {
 			child.stdout.on("data", (data: Buffer) => {
 				stdout += data;
+				stdoutWriter?.push(data);
 			});
 		}
-		if (silent && child.stderr) {
+		if (captureOutput && child.stderr) {
 			child.stderr.on("data", (data: Buffer) => {
 				stderr += data;
+				stderrWriter?.push(data);
 			});
 		}
 
 		child.on("error", (err) => {
+			stdoutWriter?.flush();
+			stderrWriter?.flush();
 			// Try to salvage any work done before the error
 			let autoCommitted = false;
 			try {
 				autoCommitted = autoCommitChanges(taskDef.name, worktreePath);
 			} catch {
 				// Non-fatal
+			}
+			if (debugEnabled) {
+				logInfo(`Spawn error ${taskDef.name}: ${err.message}`);
 			}
 
 			resolve({
@@ -422,6 +503,8 @@ Environment variables available:
 		});
 
 		child.on("close", (code) => {
+			stdoutWriter?.flush();
+			stderrWriter?.flush();
 			// Safety net: auto-commit any uncommitted changes left by the executor.
 			// This prevents lost work when agents forget to commit or crash mid-task.
 			let autoCommitted = false;
@@ -432,6 +515,9 @@ Environment variables available:
 				}
 			} catch {
 				// Non-fatal — best effort
+			}
+			if (debugEnabled) {
+				logInfo(`Exit ${taskDef.name}: ${code ?? "null"}`);
 			}
 
 			resolve({

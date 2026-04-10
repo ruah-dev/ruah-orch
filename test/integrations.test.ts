@@ -7,10 +7,7 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import type { Governance } from "../src/core/integrations.js";
 import {
 	buildGateCommands,
-	detectArhy,
 	detectCrag,
-	inferFileBoundaries,
-	parseArhyContract,
 	parseGovernance,
 	runGates,
 } from "../src/core/integrations.js";
@@ -194,70 +191,5 @@ describe("runGates", () => {
 		};
 		const result = runGates(governance, "/tmp");
 		assert.ok(result.passed);
-	});
-});
-
-describe("arhy detection", () => {
-	let dir: string;
-	beforeEach(() => {
-		dir = tmpDir();
-	});
-	afterEach(() => {
-		rmSync(dir, { recursive: true, force: true });
-	});
-
-	it("returns false when no .arhy files", () => {
-		const result = detectArhy(dir);
-		assert.ok(!result.detected);
-	});
-
-	it("detects .arhy files", () => {
-		writeFileSync(join(dir, "system.arhy"), "entity User {}", "utf-8");
-		const result = detectArhy(dir);
-		assert.ok(result.detected);
-		assert.equal(result.files.length, 1);
-	});
-});
-
-describe("parseArhyContract", () => {
-	it("parses entities with fields and actions", () => {
-		const content = `entity User {
-  id: string
-  name: string
-  action create
-  event UserCreated
-}
-
-entity Order {
-  id: string
-  total: number
-  action submit
-}`;
-
-		const result = parseArhyContract(content);
-		assert.equal(result.entities.length, 2);
-		assert.equal(result.entities[0].name, "User");
-		assert.equal(result.entities[0].fields.length, 2);
-		assert.equal(result.entities[0].actions[0], "create");
-		assert.equal(result.entities[0].events[0], "UserCreated");
-		assert.equal(result.entities[1].name, "Order");
-		assert.equal(result.entities[1].actions[0], "submit");
-	});
-});
-
-describe("inferFileBoundaries", () => {
-	it("maps entity names to file patterns", () => {
-		const contract = {
-			entities: [
-				{ name: "User", fields: [], actions: [], events: [] },
-				{ name: "Order", fields: [], actions: [], events: [] },
-			],
-		};
-		const boundaries = inferFileBoundaries(contract);
-		assert.ok(boundaries.User);
-		assert.ok(boundaries.User.includes("src/user/**"));
-		assert.ok(boundaries.User.includes("src/users/**"));
-		assert.ok(boundaries.Order);
-		assert.ok(boundaries.Order.includes("src/order/**"));
 	});
 });

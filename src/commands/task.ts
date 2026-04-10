@@ -112,6 +112,7 @@ async function executeTaskLifecycle(
 	root: string,
 	options: {
 		dryRun: boolean;
+		debugExec: boolean;
 		noExec: string | boolean | undefined;
 		startVerb: string;
 		successMessage: string;
@@ -126,6 +127,7 @@ async function executeTaskLifecycle(
 		log(`${options.startVerb} ${task.executor || "default"}...`);
 
 		const result = await executeTask(task, workspace.root, {
+			debug: options.debugExec,
 			dryRun: options.dryRun,
 		});
 
@@ -411,8 +413,10 @@ async function taskStart(args: ParsedArgs, root: string): Promise<void> {
 
 	const noExec = args.flags["no-exec"];
 	const dryRun = args.flags["dry-run"];
+	const debugExec = args.flags["debug-exec"] === true;
 
 	await executeTaskLifecycle(task, state, root, {
+		debugExec,
 		dryRun: !!dryRun,
 		noExec,
 		startVerb: "Executing with",
@@ -729,6 +733,7 @@ async function taskRetry(args: ParsedArgs, root: string): Promise<void> {
 
 	const dryRun = args.flags["dry-run"];
 	const noExec = args.flags["no-exec"];
+	const debugExec = args.flags["debug-exec"] === true;
 
 	// Reset task state — worktree and branch still exist
 	task.status = "in-progress";
@@ -741,6 +746,7 @@ async function taskRetry(args: ParsedArgs, root: string): Promise<void> {
 
 	if (task.prompt && !noExec) {
 		await executeTaskLifecycle(task, state, root, {
+			debugExec,
 			dryRun: !!dryRun,
 			noExec,
 			startVerb: "Re-executing with",
@@ -779,6 +785,7 @@ async function taskTakeover(args: ParsedArgs, root: string): Promise<void> {
 
 	const dryRun = args.flags["dry-run"];
 	const noExec = args.flags["no-exec"];
+	const debugExec = args.flags["debug-exec"] === true;
 	const previousStatus = task.status;
 	const previousExecutor = task.executor;
 	const startedAt = new Date().toISOString();
@@ -820,6 +827,7 @@ async function taskTakeover(args: ParsedArgs, root: string): Promise<void> {
 	}
 
 	await executeTaskLifecycle(nextTask, state, root, {
+		debugExec,
 		dryRun: !!dryRun,
 		noExec,
 		startVerb: "Executing with",

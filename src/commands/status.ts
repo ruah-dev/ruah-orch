@@ -3,11 +3,7 @@ import { artifactPresent } from "../core/artifact.js";
 import { claimSetToFiles } from "../core/claims.js";
 import { loadConfig } from "../core/config.js";
 import { getCurrentBranch, getRepoRoot, listWorktrees } from "../core/git.js";
-import {
-	detectArhy,
-	detectCrag,
-	readCragGovernance,
-} from "../core/integrations.js";
+import { detectCrag, readCragGovernance } from "../core/integrations.js";
 import { reconcileStateWithGit } from "../core/reconcile.js";
 import type { Task } from "../core/state.js";
 import { loadState } from "../core/state.js";
@@ -66,8 +62,6 @@ export async function run(args: ParsedArgs): Promise<void> {
 	const branch = getCurrentBranch();
 	const worktrees = listWorktrees(root);
 	const crag = detectCrag(root);
-	const arhy = detectArhy(root);
-
 	const tasks = Object.values(state.tasks);
 	const active = tasks.filter((t) => t.status === "in-progress").length;
 	const done = tasks.filter((t) => t.status === "done").length;
@@ -84,7 +78,6 @@ export async function run(args: ParsedArgs): Promise<void> {
 					currentBranch: branch,
 					cragDetected: crag.detected,
 					cragPath: crag.path,
-					arhyDetected: arhy.detected,
 					engine: {
 						workspaceBackend: config.workspaceBackend || "worktree",
 						captureArtifacts: config.captureArtifacts ?? true,
@@ -152,11 +145,6 @@ export async function run(args: ParsedArgs): Promise<void> {
 		}
 	} else {
 		logInfo("crag: not detected");
-	}
-
-	// arhy status
-	if (arhy.detected) {
-		logInfo(`arhy: detected (${arhy.files.length} contract file(s))`);
 	}
 
 	// Tasks

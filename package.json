@@ -1,6 +1,6 @@
 {
-	"name": "@levi-tc/ruah",
-	"version": "1.0.0-alpha",
+	"name": "@ruah-dev/orch",
+	"version": "1.0.0",
 	"description": "Multi-agent orchestration engine with workspace providers, claims, artifacts, compatibility planning, and merge coordination.",
 	"type": "module",
 	"bin": {
@@ -39,16 +39,19 @@
 		"subagent",
 		"crag"
 	],
-	"author": "levi-tc",
+	"author": "ruah-dev",
 	"license": "MIT",
+	"publishConfig": {
+		"access": "public"
+	},
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/levi-tc/ruah.git"
+		"url": "git+https://github.com/ruah-dev/ruah-orch.git"
 	},
 	"bugs": {
-		"url": "https://github.com/levi-tc/ruah/issues"
+		"url": "https://github.com/ruah-dev/ruah-orch/issues"
 	},
-	"homepage": "https://github.com/levi-tc/ruah#readme",
+	"homepage": "https://github.com/ruah-dev/ruah-orch#readme",
 	"engines": {
 		"node": ">=18.0.0"
 	},

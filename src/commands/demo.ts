@@ -201,7 +201,7 @@ export async function run(_args: ParsedArgs): Promise<void> {
 		// ── Real Commands ────────────────────────────────────
 		line();
 		line(`  ${c("bold", "Try it yourself:")}`);
-		line(`    ${c("cyan", "$")} npx @levi-tc/ruah init`);
+		line(`    ${c("cyan", "$")} npx @ruah-dev/orch init`);
 		line(
 			`    ${c("cyan", "$")} ruah task create auth --files "src/auth/**" --executor claude-code`,
 		);

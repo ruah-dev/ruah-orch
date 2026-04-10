@@ -6,7 +6,7 @@ Thanks for your interest in contributing! ruah is a multi-agent orchestration CL
 
 ```bash
 # Clone the repo
-git clone https://github.com/levi-tc/ruah.git
+git clone https://github.com/ruah-dev/ruah-orch.git
 cd ruah
 
 # Install dev dependencies
@@ -41,7 +41,7 @@ src/
     git.ts                Git worktree operations
     executor.ts           Executor adapters (claude-code, aider, codex, etc.)
     workflow.ts           Markdown workflow parser, DAG validation
-    integrations.ts       crag governance + arhy contract parsing
+    integrations.ts       crag governance integration
     update-notifier.ts    npm update check (zero-dep, cached)
   utils/
     format.ts             Terminal colors, formatting helpers
@@ -116,7 +116,7 @@ Trunk-based development on `main`. For contributions:
 
 ### Good First Issues
 
-Look for issues labeled [`good first issue`](https://github.com/levi-tc/ruah/labels/good%20first%20issue).
+Look for issues labeled [`good first issue`](https://github.com/ruah-dev/ruah-orch/labels/good%20first%20issue).
 
 ### Roadmap Items
 

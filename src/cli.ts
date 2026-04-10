@@ -33,6 +33,7 @@ Task subcommands:
     --parent <task>      Create as subtask (branches from parent)
   start <name>   Start task execution
     --no-exec            Create worktree only, don't run executor
+    --debug-exec         Stream spawned executor output with task prefixes
     --dry-run            Show what would be executed
   done <name>    Mark task as complete
   merge <name>   Merge task into base branch
@@ -44,16 +45,19 @@ Task subcommands:
     --json               Output as JSON
   cancel <name>  Cancel and clean up task (cascades to subtasks)
   retry <name>   Retry a failed task (re-execute without recreating worktree)
+    --debug-exec         Stream spawned executor output with task prefixes
     --no-exec            Reset status only, don't run executor
     --dry-run            Show what would be executed
   takeover <name> Adopt a created/in-progress/failed task in its existing worktree
     --executor <cmd>     Switch executor for the takeover
     --prompt <text>      Replace the stored prompt before resuming
+    --debug-exec         Stream spawned executor output with task prefixes
     --no-exec            Mark as taken over without executing
     --dry-run            Show what would be executed
 
 Workflow subcommands:
   run <file.md>  Execute a workflow
+    --debug-exec         Stream spawned executor output with task prefixes
     --strict-locks       Reject ambiguous lock globs before task creation
     --dry-run            Show plan without executing
     --json               Output as JSON

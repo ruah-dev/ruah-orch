@@ -2,7 +2,7 @@
 
 > Generated from governance.md by crag. Regenerate: `crag compile --target agents-md`
 
-## Project: @levi-tc/ruah
+## Project: @ruah-dev/orch
 
 Multi-agent orchestration CLI. Workspace isolation, DAG scheduling, file locking, merge coordination.
 

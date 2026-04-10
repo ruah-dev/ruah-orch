@@ -98,6 +98,7 @@ async function workflowRun(args: ParsedArgs, root: string): Promise<void> {
 	const workflowPath = resolve(file);
 
 	const dryRun = args.flags["dry-run"];
+	const debugExec = args.flags["debug-exec"] === true;
 	const json = args.flags.json;
 
 	const workflow = parseWorkflow(workflowPath);
@@ -163,6 +164,10 @@ async function workflowRun(args: ParsedArgs, root: string): Promise<void> {
 		}
 		logInfo("Dry run — no tasks will be executed");
 		return;
+	}
+
+	if (debugExec) {
+		logInfo("Execution debug enabled — streaming child session output");
 	}
 
 	// Detect crag for gate enforcement
@@ -281,6 +286,7 @@ async function workflowRun(args: ParsedArgs, root: string): Promise<void> {
 						taskDefWithContract,
 						workspace.root,
 						{
+							debug: debugExec,
 							silent: true,
 						},
 					);

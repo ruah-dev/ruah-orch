@@ -3,7 +3,7 @@ import { get } from "node:https";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-const PACKAGE_NAME = "@levi-tc/ruah";
+const PACKAGE_NAME = "@ruah-dev/orch";
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const CACHE_DIR = join(homedir(), ".ruah");
 const CACHE_FILE = join(CACHE_DIR, "update-check.json");
@@ -127,7 +127,7 @@ export function formatUpdateBanner(info: UpdateInfo): string {
 		"",
 		`${yellow}╭──────────────────────────────────────────╮${reset}`,
 		`${yellow}│${reset}  Update available: ${dim}${info.currentVersion}${reset} → ${bold}${cyan}${info.latestVersion}${reset}${" ".repeat(Math.max(0, 18 - info.currentVersion.length - info.latestVersion.length))}${yellow}│${reset}`,
-		`${yellow}│${reset}  Run ${cyan}npm install -g @levi-tc/ruah${reset}       ${yellow}│${reset}`,
+		`${yellow}│${reset}  Run ${cyan}npm install -g @ruah-dev/orch${reset}       ${yellow}│${reset}`,
 		`${yellow}╰──────────────────────────────────────────╯${reset}`,
 		"",
 	].join("\n");

@@ -1,5 +1,9 @@
 # ruah
 
+[![npm version](https://img.shields.io/npm/v/@ruah-dev/orch)](https://www.npmjs.com/package/@ruah-dev/orch)
+[![license](https://img.shields.io/npm/l/@ruah-dev/orch)](LICENSE)
+[![zero dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)](package.json)
+
 **Multi-agent orchestration that actually coordinates code changes.**
 
 When multiple AI agents work on the same repo, their edits collide. `ruah` gives each task an isolated workspace, tracks claims over the files it is allowed to touch, captures durable artifacts for what changed, and merges everything back in dependency order.
@@ -16,7 +20,7 @@ When multiple AI agents work on the same repo, their edits collide. `ruah` gives
 
 Zero runtime dependencies. Works with Claude Code, Aider, Codex, Cursor, Windsurf, and any CLI.
 
-## What 1.0.0-alpha Includes
+## What's Included
 
 - task orchestration with isolated workspaces
 - canonical claims for owned/shared/read-only file access
@@ -28,11 +32,11 @@ Zero runtime dependencies. Works with Claude Code, Aider, Codex, Cursor, Windsur
 ## See It
 
 ```bash
-npx @levi-tc/ruah demo
+npx @ruah-dev/orch demo
 ```
 
 <p align="center">
-  <img src=".github/demo.gif" alt="ruah demo" width="100%" />
+  <img src="https://raw.githubusercontent.com/ruah-dev/ruah-orch/main/.github/demo.gif" alt="ruah demo" width="100%" />
 </p>
 
 Creates a temp repo, shows worktree isolation, file locking, conflict detection, and DAG scheduling — then cleans up. Takes 3 seconds.
@@ -41,7 +45,7 @@ Creates a temp repo, shows worktree isolation, file locking, conflict detection,
 
 ```bash
 # Initialize in any git repo
-npx @levi-tc/ruah init
+npx @ruah-dev/orch init
 
 # Create isolated tasks with file locks
 ruah task create auth --files "src/auth/**" --executor claude-code --prompt "Add authentication"
@@ -93,7 +97,7 @@ ruah does not yet guarantee:
 
 ### 1. Workspace Isolation
 
-Each task gets its own workspace. In `1.0.0-alpha`, that workspace is a Git worktree. The orchestration layer talks to a workspace provider instead of calling raw worktree operations directly.
+Each task gets its own workspace. Currently, that workspace is a Git worktree. The orchestration layer talks to a workspace provider instead of calling raw worktree operations directly.
 
 ```
 created → in-progress → done → merged
@@ -273,30 +277,21 @@ Every command supports `--json` for programmatic consumption.
 }
 ```
 
-`worktree` is the shipped backend in `1.0.0-alpha`.
+`worktree` is the shipped backend.
 
 ## Install
 
 Stable release:
 
 ```bash
-npm install -g @levi-tc/ruah
+npm install -g @ruah-dev/orch
 ```
 
-Alpha release:
+Or run without installing:
 
 ```bash
-npm install -g @levi-tc/ruah@alpha
+npx @ruah-dev/orch <command>
 ```
-
-You can also run either channel without installing:
-
-```bash
-npx @levi-tc/ruah <command>
-npx @levi-tc/ruah@alpha <command>
-```
-
-npm shows the `latest` dist-tag in the package header. That means the npm page will continue to show the current stable release at the top while the alpha line remains available through `@alpha`.
 
 **Requirements:** Node.js 18+, Git. Zero runtime dependencies.
 
@@ -304,8 +299,7 @@ npm shows the `latest` dist-tag in the package header. That means the npm page w
 
 ```
 crag  — governance, discovery, skills, compilation    (@whitehatd/crag)
-ruah  — multi-agent orchestration                     (@levi-tc/ruah)
-arhy  — system contracts                              (@levi-tc/arhy)
+ruah  — multi-agent orchestration                     (@ruah-dev/orch)
 ```
 
 ## Community

@@ -1,4 +1,4 @@
-# Copilot Instructions — @levi-tc/ruah
+# Copilot Instructions — @ruah-dev/orch
 
 > Generated from governance.md by crag. Regenerate: `crag compile --target copilot`
 

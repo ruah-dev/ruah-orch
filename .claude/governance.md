@@ -3,7 +3,7 @@
 # Change this when your standards change. The skills never go stale.
 
 ## Identity
-- Project: @levi-tc/ruah
+- Project: @ruah-dev/orch
 - Description: Multi-agent orchestration CLI. Workspace isolation, DAG scheduling, file locking, merge coordination.
 
 ## Gates (run in order, stop on failure)
@@ -32,7 +32,7 @@
 - Auto-commit after gates pass
 
 ## Deployment
-- Target: npm publish (@levi-tc/ruah)
+- Target: npm publish (@ruah-dev/orch)
 - CI: GitHub Actions (gates.yml, pr-check.yml, release.yml)
 - Strategy: npm version patch/minor/major → git push --tags → auto-publish
 

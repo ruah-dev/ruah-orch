@@ -1,11 +1,17 @@
+# crag:auto-start
 #!/bin/sh
 # Generated from governance.md by crag
 # Regenerate: crag compile --target husky
 set -e
 
+# typecheck
+npx tsc --noEmit || exit 1
+
 # lint & format
-npx @biomejs/biome check --write . || exit 1
-npx @biomejs/biome check . || exit 1
+npx biome check --write . || exit 1
+npx biome check . || exit 1
 
 # test
-node --test test/*.test.js || exit 1
+npm test || exit 1
+
+# crag:auto-end
