@@ -204,7 +204,7 @@ Built-in support for common AI agents.
 | `script` | Any shell command |
 | `raw` | Explicit shell execution via `sh -lc` / `cmd /c` |
 
-### 7. Governance (crag)
+### 7. Governance
 
 Auto-detects `.claude/governance.md`. When found, gates run before every merge:
 
@@ -302,9 +302,9 @@ npx @ruah-dev/orch <command>
 ## Ecosystem
 
 ```
-crag  — governance, discovery, skills, compilation    (@whitehatd/crag)
 ruah  — top-level CLI router                          (@ruah-dev/cli)
 orch  — multi-agent orchestration                     (@ruah-dev/orch)
+conv  — API spec → agent tool surfaces                (@ruah-dev/conv)
 ```
 
 ## Community
