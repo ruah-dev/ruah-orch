@@ -51,25 +51,6 @@ Detect OS and shell. Use appropriate syntax (Unix forward slashes if Git Bash on
 
 ---
 
-## 0.05. Skill Currency Check
-
-Check whether installed skills are behind the crag CLI:
-
-// turbo
-```
-crag upgrade --check
-```
-
-If the output lists any skill as needing an upgrade (e.g. `0.2.x → 0.2.y`):
-- Report: `"Skills outdated — run: crag upgrade"`
-- Continue with the current version — never block startup.
-
-> This check uses `crag upgrade --check` so the skill never has to hard-code
-> its own version number; it asks the CLI, which is always in lockstep with
-> the package. If `crag` is not on PATH (bare CI runner), skip silently.
-
----
-
 ## 0.1. Session Continuity (Warm Start)
 
 Check for a previous session state:

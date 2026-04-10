@@ -1,5 +1,4 @@
-# Generated from governance.md by crag
-# Regenerate: crag compile --target github
+# Governance gates
 name: Governance Gates
 
 on:

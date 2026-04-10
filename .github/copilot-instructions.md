@@ -1,6 +1,6 @@
 # Copilot Instructions — @ruah-dev/orch
 
-> Generated from governance.md by crag. Regenerate: `crag compile --target copilot`
+> Generated from governance.md
 
 Multi-agent orchestration CLI. Workspace isolation, DAG scheduling, file locking, merge coordination.
 
@@ -27,4 +27,4 @@ When you propose changes, the following checks must pass before commit:
 
 ## Tool Context
 
-This project uses **crag** (https://www.npmjs.com/package/@whitehatd/crag) as its AI-agent governance layer. The `governance.md` file is the authoritative source. If you have shell access, run `crag check` to verify the infrastructure and `crag diff` to detect drift.
+The `governance.md` file is the authoritative source for quality gates and conventions.

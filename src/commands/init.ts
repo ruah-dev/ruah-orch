@@ -2,7 +2,7 @@ import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ParsedArgs } from "../cli.js";
 import { getCurrentBranch, getRepoRoot, isGitRepo } from "../core/git.js";
-import { detectCrag } from "../core/integrations.js";
+import { detectGovernance } from "../core/integrations.js";
 import {
 	ensureStateDir,
 	loadState,
@@ -91,14 +91,14 @@ export async function run(args: ParsedArgs): Promise<void> {
 	logInfo("Workflows: .ruah/workflows/");
 	logInfo("Worktrees: .ruah/worktrees/");
 
-	// Detect crag
-	const crag = detectCrag(root);
-	if (crag.detected) {
+	// Detect governance
+	const gov = detectGovernance(root);
+	if (gov.detected) {
 		logSuccess(
-			`crag detected (${crag.path}) — gates will be enforced on merge`,
+			`Governance detected (${gov.path}) — gates will be enforced on merge`,
 		);
 	} else {
-		logInfo("crag not detected — operating standalone");
+		logInfo("Governance not detected — operating standalone");
 	}
 
 	console.log("");

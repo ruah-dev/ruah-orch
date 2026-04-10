@@ -10,7 +10,7 @@ export interface RuahConfig {
 	timeout?: number;
 	/** Default file patterns */
 	files?: string[];
-	/** Skip crag gates by default */
+	/** Skip governance gates by default */
 	skipGates?: boolean;
 	/** Parallel execution in workflows */
 	parallel?: boolean;

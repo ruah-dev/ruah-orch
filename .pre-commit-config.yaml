@@ -1,5 +1,4 @@
-# Generated from governance.md by crag
-# Regenerate: crag compile --target pre-commit
+# Pre-commit hooks
 repos:
   - repo: local
     hooks:

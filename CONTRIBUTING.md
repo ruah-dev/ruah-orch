@@ -41,7 +41,7 @@ src/
     git.ts                Git worktree operations
     executor.ts           Executor adapters (claude-code, aider, codex, etc.)
     workflow.ts           Markdown workflow parser, DAG validation
-    integrations.ts       crag governance integration
+    integrations.ts       governance integration
     update-notifier.ts    npm update check (zero-dep, cached)
   utils/
     format.ts             Terminal colors, formatting helpers

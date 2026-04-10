@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import type { Governance } from "../src/core/integrations.js";
 import {
 	buildGateCommands,
-	detectCrag,
+	detectGovernance,
 	parseGovernance,
 	runGates,
 } from "../src/core/integrations.js";
@@ -18,7 +18,7 @@ function tmpDir(): string {
 	return dir;
 }
 
-describe("crag detection", () => {
+describe("governance detection", () => {
 	let dir: string;
 	beforeEach(() => {
 		dir = tmpDir();
@@ -28,21 +28,21 @@ describe("crag detection", () => {
 	});
 
 	it("returns false when governance.md absent", () => {
-		const result = detectCrag(dir);
+		const result = detectGovernance(dir);
 		assert.ok(!result.detected);
 	});
 
 	it("detects .claude/governance.md", () => {
 		mkdirSync(join(dir, ".claude"), { recursive: true });
 		writeFileSync(join(dir, ".claude", "governance.md"), "# Gov", "utf-8");
-		const result = detectCrag(dir);
+		const result = detectGovernance(dir);
 		assert.ok(result.detected);
 		assert.equal(result.path, ".claude/governance.md");
 	});
 
 	it("detects root governance.md", () => {
 		writeFileSync(join(dir, "governance.md"), "# Gov", "utf-8");
-		const result = detectCrag(dir);
+		const result = detectGovernance(dir);
 		assert.ok(result.detected);
 		assert.equal(result.path, "governance.md");
 	});

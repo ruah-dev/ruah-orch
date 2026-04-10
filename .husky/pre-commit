@@ -1,7 +1,5 @@
-# crag:auto-start
 #!/bin/sh
-# Generated from governance.md by crag
-# Regenerate: crag compile --target husky
+# Governance gates
 set -e
 
 # typecheck
@@ -13,5 +11,3 @@ npx biome check . || exit 1
 
 # test
 npm test || exit 1
-
-# crag:auto-end

@@ -42,8 +42,7 @@
 		"claims",
 		"compatibility",
 		"workflow",
-		"subagent",
-		"crag"
+		"subagent"
 	],
 	"author": "ruah-dev",
 	"license": "MIT",

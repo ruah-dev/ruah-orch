@@ -113,7 +113,7 @@ All notable changes to this project will be documented in this file.
 - **File locks** — advisory glob-based locks preventing edit conflicts between agents
 - **Executor adapters** — built-in support for Claude Code, Aider, Codex, OpenCode, and shell scripts
 - **Subagent spawning** — agents can create subtasks that branch from the parent's worktree
-- **crag integration** — auto-enforces governance gates (MANDATORY/OPTIONAL/ADVISORY) on merge
+- **governance integration** — auto-enforces governance gates (MANDATORY/OPTIONAL/ADVISORY) on merge
 - **arhy integration** — detects `.arhy` contract files for file boundary inference
 - **JSON output** — every command supports `--json` for programmatic consumption
 - **Status dashboard** — `ruah status` shows tasks, locks, worktrees, and integrations

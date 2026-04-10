@@ -2,9 +2,9 @@ import { execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-// --- crag Integration ---
+// --- Governance Integration ---
 
-export interface CragDetection {
+export interface GovernanceDetection {
 	detected: boolean;
 	path: string | null;
 	absolute: string | null;
@@ -38,7 +38,7 @@ export interface GateResult {
 
 const GOVERNANCE_PATHS = [".claude/governance.md", "governance.md"];
 
-export function detectCrag(root: string): CragDetection {
+export function detectGovernance(root: string): GovernanceDetection {
 	for (const rel of GOVERNANCE_PATHS) {
 		const abs = join(root, rel);
 		if (existsSync(abs)) {
@@ -48,11 +48,11 @@ export function detectCrag(root: string): CragDetection {
 	return { detected: false, path: null, absolute: null };
 }
 
-export function readCragGovernance(root: string): Governance | null {
-	const crag = detectCrag(root);
-	if (!crag.detected || !crag.absolute) return null;
+export function readGovernance(root: string): Governance | null {
+	const gov = detectGovernance(root);
+	if (!gov.detected || !gov.absolute) return null;
 
-	const content = readFileSync(crag.absolute, "utf-8");
+	const content = readFileSync(gov.absolute, "utf-8");
 	return parseGovernance(content);
 }
 

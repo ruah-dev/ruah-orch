@@ -6,8 +6,8 @@ import { executeTask } from "../core/executor.js";
 import { getRepoRoot } from "../core/git.js";
 import { compareArtifactToBase } from "../core/integration.js";
 import {
-	detectCrag,
-	readCragGovernance,
+	detectGovernance,
+	readGovernance,
 	runGates,
 } from "../core/integrations.js";
 import type { Task } from "../core/state.js";
@@ -531,12 +531,12 @@ function taskMerge(args: ParsedArgs, root: string): void {
 		return;
 	}
 
-	// crag gate enforcement (skip for subtasks merging into parent — gates run on parent merge)
+	// Governance gate enforcement (skip for subtasks merging into parent — gates run on parent merge)
 	if (!skipGates && !isSubtask) {
-		const crag = detectCrag(root);
-		if (crag.detected) {
-			log("Running crag gates...");
-			const governance = readCragGovernance(root);
+		const gov = detectGovernance(root);
+		if (gov.detected) {
+			log("Running governance gates...");
+			const governance = readGovernance(root);
 			if (governance) {
 				const gateResult = runGates(governance, workspace.root);
 				for (const r of gateResult.results) {
@@ -568,7 +568,7 @@ function taskMerge(args: ParsedArgs, root: string): void {
 	} else if (isSubtask && !skipGates) {
 		logInfo("Subtask merge — gates deferred to parent merge into base branch");
 	} else {
-		logWarn("Skipping crag gates (--skip-gates)");
+		logWarn("Skipping governance gates (--skip-gates)");
 	}
 
 	// Merge — subtasks merge from within the parent's worktree

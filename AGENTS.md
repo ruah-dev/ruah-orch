@@ -1,6 +1,6 @@
 # AGENTS.md
 
-> Generated from governance.md by crag. Regenerate: `crag compile --target agents-md`
+> Generated from governance.md
 
 ## Project: @ruah-dev/orch
 

@@ -45,7 +45,7 @@ Task subcommands:
   done <name>    Mark task as complete
   merge <name>   Merge task into base branch
     --dry-run            Show diff without merging
-    --skip-gates         Skip crag gate enforcement
+    --skip-gates         Skip governance gate enforcement
   list           List all tasks (shows hierarchy)
     --json               Output as JSON
   children <name> List subtasks of a task
@@ -90,10 +90,10 @@ Smart planner:
   Agents receive modification contracts in .ruah-task.md specifying
   owned, shared-append, and read-only file boundaries.
 
-crag integration:
+Governance integration:
   When .claude/governance.md is detected, ruah automatically
   enforces quality gates before merging task branches.
-  No configuration needed — just have crag set up.
+  No configuration needed — just have governance set up.
 `;
 }
 

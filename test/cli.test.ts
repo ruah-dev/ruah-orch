@@ -101,7 +101,7 @@ describe("CLI integration", () => {
 		);
 	});
 
-	it("init detects crag when governance.md present", () => {
+	it("init detects governance when governance.md present", () => {
 		mkdirSync(join(repo, ".claude"), { recursive: true });
 		writeFileSync(
 			join(repo, ".claude", "governance.md"),
@@ -109,7 +109,7 @@ describe("CLI integration", () => {
 			"utf-8",
 		);
 		const out = ruah("init", repo);
-		assert.ok(out.includes("crag detected"));
+		assert.ok(out.includes("Governance detected"));
 	});
 
 	it("task create creates worktree and sets locks", () => {
@@ -144,11 +144,11 @@ describe("CLI integration", () => {
 		assert.equal(parsed.test.name, "test");
 	});
 
-	it("status --json outputs valid JSON with cragDetected", () => {
+	it("status --json outputs valid JSON with governanceDetected", () => {
 		ruah("init", repo);
 		const out = ruah("status --json", repo);
 		const parsed = JSON.parse(out);
-		assert.equal(typeof parsed.cragDetected, "boolean");
+		assert.equal(typeof parsed.governanceDetected, "boolean");
 		assert.equal(parsed.engine.workspaceBackend, "worktree");
 		assert.equal(typeof parsed.engine.captureArtifacts, "boolean");
 		assert.ok(parsed.baseBranch);

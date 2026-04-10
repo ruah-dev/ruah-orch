@@ -3,7 +3,7 @@ import { artifactPresent } from "../core/artifact.js";
 import { claimSetToFiles } from "../core/claims.js";
 import { loadConfig } from "../core/config.js";
 import { getCurrentBranch, getRepoRoot, listWorktrees } from "../core/git.js";
-import { detectCrag, readCragGovernance } from "../core/integrations.js";
+import { detectGovernance, readGovernance } from "../core/integrations.js";
 import { reconcileStateWithGit } from "../core/reconcile.js";
 import type { Task } from "../core/state.js";
 import { loadState } from "../core/state.js";
@@ -61,7 +61,7 @@ export async function run(args: ParsedArgs): Promise<void> {
 	const reconciliation = reconcileStateWithGit(root, state);
 	const branch = getCurrentBranch();
 	const worktrees = listWorktrees(root);
-	const crag = detectCrag(root);
+	const gov = detectGovernance(root);
 	const tasks = Object.values(state.tasks);
 	const active = tasks.filter((t) => t.status === "in-progress").length;
 	const done = tasks.filter((t) => t.status === "done").length;
@@ -76,8 +76,8 @@ export async function run(args: ParsedArgs): Promise<void> {
 				{
 					baseBranch: state.baseBranch,
 					currentBranch: branch,
-					cragDetected: crag.detected,
-					cragPath: crag.path,
+					governanceDetected: gov.detected,
+					governancePath: gov.path,
 					engine: {
 						workspaceBackend: config.workspaceBackend || "worktree",
 						captureArtifacts: config.captureArtifacts ?? true,
@@ -124,9 +124,9 @@ export async function run(args: ParsedArgs): Promise<void> {
 	log(`Base branch: ${state.baseBranch}`);
 	log(`Current branch: ${branch}`);
 
-	// crag status
-	if (crag.detected) {
-		const governance = readCragGovernance(root);
+	// governance status
+	if (gov.detected) {
+		const governance = readGovernance(root);
 		if (governance) {
 			const mandatory = governance.gates.filter(
 				(g) => g.classification === "MANDATORY",
@@ -138,13 +138,13 @@ export async function run(args: ParsedArgs): Promise<void> {
 				(g) => g.classification === "ADVISORY",
 			).length;
 			logSuccess(
-				`crag: detected (${crag.path}) — ${governance.gates.length} gates (${mandatory} mandatory, ${optional} optional, ${advisory} advisory)`,
+				`governance: detected (${gov.path}) — ${governance.gates.length} gates (${mandatory} mandatory, ${optional} optional, ${advisory} advisory)`,
 			);
 		} else {
-			logSuccess(`crag: detected (${crag.path})`);
+			logSuccess(`governance: detected (${gov.path})`);
 		}
 	} else {
-		logInfo("crag: not detected");
+		logInfo("governance: not detected");
 	}
 
 	// Tasks

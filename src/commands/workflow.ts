@@ -16,8 +16,8 @@ import {
 	compareArtifactToBase,
 } from "../core/integration.js";
 import {
-	detectCrag,
-	readCragGovernance,
+	detectGovernance,
+	readGovernance,
 	runGates,
 } from "../core/integrations.js";
 import type { SmartPlan, StageDecision } from "../core/planner.js";
@@ -170,12 +170,12 @@ async function workflowRun(args: ParsedArgs, root: string): Promise<void> {
 		logInfo("Execution debug enabled — streaming child session output");
 	}
 
-	// Detect crag for gate enforcement
-	const crag = detectCrag(root);
+	// Detect governance for gate enforcement
+	const gov = detectGovernance(root);
 	let governance = null;
-	if (crag.detected) {
-		governance = readCragGovernance(root);
-		logInfo("crag detected — gates will run after each stage");
+	if (gov.detected) {
+		governance = readGovernance(root);
+		logInfo("Governance detected — gates will run after each stage");
 	}
 
 	const results: ExecResult[] = [];
@@ -471,7 +471,7 @@ async function workflowRun(args: ParsedArgs, root: string): Promise<void> {
 				}
 			}
 
-			// Run crag gates if available
+			// Run governance gates if available
 			if (governance) {
 				for (const { def, workspace } of stageTasks) {
 					const gateResult = runGates(governance, workspace.root);
