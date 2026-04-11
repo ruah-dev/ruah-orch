@@ -1,6 +1,6 @@
 {
 	"name": "@ruah-dev/orch",
-	"version": "1.1.0",
+	"version": "1.1.1",
 	"description": "Thin installer for ruah orchestration. Installs the top-level CLI and orch core package.",
 	"type": "module",
 	"files": [

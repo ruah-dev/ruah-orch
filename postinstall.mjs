@@ -30,44 +30,63 @@ export function buildUnixLauncher(cliPath) {
 	return `#!/usr/bin/env sh\nexec node '${escapedPath}' \"$@\"\n`;
 }
 
-function installGlobalLauncher() {
+export function installGlobalLauncher(options = {}) {
+	const {
+		env = process.env,
+		platform = process.platform,
+		log = console,
+		cliPath = resolveCliEntrypoint(),
+	} = options;
+
 	if (
-		process.env.npm_config_global !== "true" &&
-		process.env.npm_config_location !== "global"
+		env.npm_config_global !== "true" &&
+		env.npm_config_location !== "global"
 	) {
-		return;
+		return { status: "skipped", reason: "not-global" };
 	}
 
-	const cliPath = resolveCliEntrypoint();
 	if (!cliPath) {
-		console.warn(
+		log.warn(
 			`[${PACKAGE_NAME}] Installed without @ruah-dev/cli. Install @ruah-dev/cli directly for the top-level \`ruah\` command.`,
 		);
-		return;
+		return { status: "skipped", reason: "missing-cli" };
 	}
 
-	const binDir = getGlobalBinDir();
+	const binDir = getGlobalBinDir(env, platform);
 	if (!binDir) {
-		console.warn(
+		log.warn(
 			`[${PACKAGE_NAME}] Installed @ruah-dev/cli but could not determine the global bin directory. Reinstall @ruah-dev/cli directly if \`ruah\` is missing.`,
 		);
-		return;
+		return { status: "skipped", reason: "missing-bin-dir" };
 	}
 
-	const launcherPath = join(binDir, process.platform === "win32" ? "ruah.cmd" : "ruah");
-	if (existsSync(launcherPath)) {
-		return;
+	const launcherPath = join(binDir, platform === "win32" ? "ruah.cmd" : "ruah");
+
+	try {
+		mkdirSync(binDir, { recursive: true });
+
+		if (existsSync(launcherPath)) {
+			return { status: "exists", launcherPath };
+		}
+
+		if (platform === "win32") {
+			writeFileSync(launcherPath, `@ECHO OFF\r\nnode "${cliPath}" %*\r\n`, "utf8");
+			return { status: "installed", launcherPath };
+		}
+
+		writeFileSync(launcherPath, buildUnixLauncher(cliPath), "utf8");
+		chmodSync(launcherPath, 0o755);
+		return { status: "installed", launcherPath };
+	} catch (error) {
+		if (error?.code === "EEXIST" && existsSync(launcherPath)) {
+			return { status: "exists", launcherPath };
+		}
+
+		log.warn(
+			`[${PACKAGE_NAME}] Could not install the global \`ruah\` launcher at ${launcherPath}: ${error.message}`,
+		);
+		return { status: "skipped", reason: "launcher-install-failed", launcherPath, error };
 	}
-
-	mkdirSync(binDir, { recursive: true });
-
-	if (process.platform === "win32") {
-		writeFileSync(launcherPath, `@ECHO OFF\r\nnode "${cliPath}" %*\r\n`, "utf8");
-		return;
-	}
-
-	writeFileSync(launcherPath, buildUnixLauncher(cliPath), "utf8");
-	chmodSync(launcherPath, 0o755);
 }
 
 if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
