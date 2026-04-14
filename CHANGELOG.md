@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.2] - 2026-04-14
+
+### Added
+- **Codex plugin install path** — `ruah setup` now writes a local Codex plugin at `plugins/ruah-orchestrator` plus a `.agents/plugins/marketplace.json` entry so Codex can auto-detect ruah orchestration guidance per repo.
+
+### Changed
+- **Shared agent guidance** — Claude Code and Codex now receive the same ruah task/workflow/takeover instructions from a single setup source, keeping agent setup docs aligned.
+- **Setup documentation** — README setup docs now state that `ruah setup` installs Codex integration artifacts in addition to the existing agent rules and Claude files.
+
 ## [1.0.0-alpha] - 2026-04-08
 
 ### Added

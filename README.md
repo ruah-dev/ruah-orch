@@ -36,7 +36,7 @@ npx @ruah-dev/cli demo
 ```
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ruah-dev/ruah-orch/main/.github/demo.gif" alt="ruah demo" width="100%" />
+  <img src="https://ruah.sh/demos/ruah-orch-demo.gif" alt="ruah demo — worktree isolation, file locking, conflict detection, and DAG scheduling" width="100%" />
 </p>
 
 Creates a temp repo, shows worktree isolation, file locking, conflict detection, and DAG scheduling — then cleans up. Takes 3 seconds.
@@ -220,7 +220,9 @@ Register ruah with all agents in one command:
 ruah setup
 ```
 
-Writes integration files for Claude Code, Cursor, Windsurf, Cody, and Continue. After setup, agents auto-detect ruah and know how to orchestrate tasks.
+Writes integration files for Claude Code, Codex, Cursor, Windsurf, Cody, and Continue. After setup, agents auto-detect ruah and know how to orchestrate tasks.
+For Claude Code, this includes a project-local skill and enforcement hook.
+For Codex, this includes a repo-local plugin at `plugins/ruah-orchestrator` and a marketplace entry at `.agents/plugins/marketplace.json`.
 
 ## CLI Reference
 

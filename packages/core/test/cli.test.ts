@@ -112,6 +112,73 @@ describe("CLI integration", () => {
 		assert.ok(out.includes("Governance detected"));
 	});
 
+	it("setup installs Claude Code and Codex integrations", () => {
+		const out = ruah("setup", repo);
+		assert.ok(out.includes("Claude Code: installed skill for auto-detection"));
+		assert.ok(out.includes("Codex: installed local plugin manifest"));
+		assert.ok(
+			existsSync(
+				join(repo, ".claude", "skills", "ruah-orchestrator", "SKILL.md"),
+			),
+		);
+		assert.ok(existsSync(join(repo, ".claude", "hooks", "ruah-enforce.sh")));
+		assert.ok(
+			existsSync(
+				join(
+					repo,
+					"plugins",
+					"ruah-orchestrator",
+					".codex-plugin",
+					"plugin.json",
+				),
+			),
+		);
+		assert.ok(
+			existsSync(
+				join(
+					repo,
+					"plugins",
+					"ruah-orchestrator",
+					"skills",
+					"ruah-orchestrator",
+					"SKILL.md",
+				),
+			),
+		);
+
+		const marketplace = JSON.parse(
+			readFileSync(
+				join(repo, ".agents", "plugins", "marketplace.json"),
+				"utf-8",
+			),
+		);
+		assert.equal(marketplace.name, "local");
+		assert.ok(
+			marketplace.plugins.some(
+				(plugin: { name: string; source: { path: string } }) =>
+					plugin.name === "ruah-orchestrator" &&
+					plugin.source.path === "./plugins/ruah-orchestrator",
+			),
+		);
+	});
+
+	it("setup does not duplicate the Codex marketplace entry", () => {
+		ruah("setup", repo);
+		ruah("setup", repo);
+
+		const marketplace = JSON.parse(
+			readFileSync(
+				join(repo, ".agents", "plugins", "marketplace.json"),
+				"utf-8",
+			),
+		);
+		const entries = marketplace.plugins.filter(
+			(plugin: { name: string }) => plugin.name === "ruah-orchestrator",
+		);
+
+		assert.equal(entries.length, 1);
+	});
+
 	it("task create creates worktree and sets locks", () => {
 		ruah("init", repo);
 		const out = ruah(

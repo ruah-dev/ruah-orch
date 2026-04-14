@@ -9,6 +9,7 @@ import { join } from "node:path";
 import type { ParsedArgs } from "../cli.js";
 import { getRepoRoot, isGitRepo } from "../core/git.js";
 import { log, logError, logInfo, logSuccess } from "../utils/format.js";
+import { VERSION } from "../version.js";
 
 // --- Enforcement Hook (installed for all harnesses that support hooks) ---
 
@@ -33,15 +34,7 @@ echo "   Or check status: ruah status"
 exit 0
 `;
 
-// --- Claude Code Integration ---
-
-const CLAUDE_SKILL = `---
-name: ruah-orchestrator
-description: Multi-agent orchestration with ruah — task management, workflow execution, file locking
-activation: auto
----
-
-# ruah — Multi-Agent Orchestration
+const RUAH_GUIDE_BODY = `# ruah — Multi-Agent Orchestration
 
 ruah is installed and available in this project. Use it to orchestrate parallel AI agent work.
 
@@ -93,6 +86,25 @@ ruah task create <child> --parent <parent> --files "src/sub/**" --executor claud
 Every command supports \`--json\` for structured output.
 `;
 
+// --- Claude Code Integration ---
+
+const CLAUDE_SKILL = `---
+name: ruah-orchestrator
+description: Multi-agent orchestration with ruah — task management, workflow execution, file locking
+activation: auto
+---
+
+${RUAH_GUIDE_BODY}`;
+
+// --- Codex Integration ---
+
+const CODEX_SKILL = `---
+name: ruah-orchestrator
+description: Use ruah to coordinate parallel Codex work with isolated tasks, file locks, workflows, and task handoffs.
+---
+
+${RUAH_GUIDE_BODY}`;
+
 // --- Cursor Integration ---
 
 const CURSOR_RULE = `# ruah — Multi-Agent Orchestration
@@ -133,6 +145,27 @@ interface SetupTarget {
 	path: string;
 	content: string;
 	description: string;
+}
+
+interface MarketplaceEntry {
+	name: string;
+	source: {
+		source: "local";
+		path: string;
+	};
+	policy: {
+		installation: "AVAILABLE";
+		authentication: "ON_INSTALL";
+	};
+	category: string;
+}
+
+interface MarketplaceFile extends JsonObject {
+	name: string;
+	interface?: {
+		displayName?: string;
+	};
+	plugins: MarketplaceEntry[];
 }
 
 function getTargets(root: string): SetupTarget[] {
@@ -239,6 +272,150 @@ function installClaudeHooks(root: string, force: boolean): boolean {
 	return true;
 }
 
+function writeJsonFile(path: string, value: unknown): void {
+	mkdirSync(join(path, ".."), { recursive: true });
+	writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, "utf-8");
+}
+
+function buildCodexPluginManifest(): JsonObject {
+	return {
+		name: "ruah-orchestrator",
+		version: VERSION,
+		description:
+			"Project-local Codex plugin that teaches agents to orchestrate work through ruah tasks, workflows, and handoffs.",
+		author: {
+			name: "ruah-dev",
+			url: "https://github.com/ruah-dev",
+		},
+		homepage: "https://github.com/ruah-dev/ruah-orch#readme",
+		repository: "https://github.com/ruah-dev/ruah-orch",
+		license: "MIT",
+		keywords: [
+			"ruah",
+			"multi-agent",
+			"orchestration",
+			"codex",
+			"claude-code",
+			"worktree",
+		],
+		skills: "./skills/",
+		interface: {
+			displayName: "ruah Orchestrator",
+			shortDescription:
+				"Coordinate parallel Codex work with isolated ruah tasks.",
+			longDescription:
+				"Adds ruah task, workflow, and takeover guidance to Codex so agents work inside isolated worktrees with file locking.",
+			developerName: "ruah-dev",
+			category: "Developer Tools",
+			capabilities: ["Interactive", "Write"],
+			websiteURL: "https://github.com/ruah-dev/ruah-orch#readme",
+			defaultPrompt: [
+				"Create a ruah task for the auth refactor.",
+				"Plan a ruah workflow for these files.",
+				"Take over the stranded backend ruah task.",
+			],
+			brandColor: "#2563EB",
+		},
+	};
+}
+
+function buildCodexMarketplaceEntry(): MarketplaceEntry {
+	return {
+		name: "ruah-orchestrator",
+		source: {
+			source: "local",
+			path: "./plugins/ruah-orchestrator",
+		},
+		policy: {
+			installation: "AVAILABLE",
+			authentication: "ON_INSTALL",
+		},
+		category: "Developer Tools",
+	};
+}
+
+function installCodexPlugin(
+	root: string,
+	force: boolean,
+): {
+	installed: number;
+	skipped: number;
+} {
+	let installed = 0;
+	let skipped = 0;
+
+	const pluginRoot = join(root, "plugins", "ruah-orchestrator");
+	const manifestPath = join(pluginRoot, ".codex-plugin", "plugin.json");
+	const skillPath = join(pluginRoot, "skills", "ruah-orchestrator", "SKILL.md");
+	const marketplacePath = join(root, ".agents", "plugins", "marketplace.json");
+
+	if (existsSync(manifestPath) && !force) {
+		logInfo("Codex: plugin manifest exists (use --force to overwrite)");
+		skipped++;
+	} else {
+		writeJsonFile(manifestPath, buildCodexPluginManifest());
+		logSuccess("Codex: installed local plugin manifest");
+		installed++;
+	}
+
+	if (existsSync(skillPath) && !force) {
+		logInfo("Codex: plugin skill exists (use --force to overwrite)");
+		skipped++;
+	} else {
+		mkdirSync(join(skillPath, ".."), { recursive: true });
+		writeFileSync(skillPath, CODEX_SKILL, "utf-8");
+		logSuccess("Codex: installed local plugin skill");
+		installed++;
+	}
+
+	let marketplace: MarketplaceFile;
+	if (existsSync(marketplacePath)) {
+		try {
+			const parsed = JSON.parse(readFileSync(marketplacePath, "utf-8"));
+			marketplace = {
+				name: parsed.name || "local",
+				interface: parsed.interface || { displayName: "Local Plugins" },
+				plugins: Array.isArray(parsed.plugins) ? parsed.plugins : [],
+			};
+		} catch {
+			logError(
+				"Codex: marketplace.json is invalid JSON (use --force to overwrite)",
+			);
+			return { installed, skipped: skipped + 1 };
+		}
+	} else {
+		marketplace = {
+			name: "local",
+			interface: { displayName: "Local Plugins" },
+			plugins: [],
+		};
+	}
+
+	const entry = buildCodexMarketplaceEntry();
+	const existingIndex = marketplace.plugins.findIndex(
+		(plugin) => plugin.name === entry.name,
+	);
+
+	if (existingIndex !== -1) {
+		if (force) {
+			marketplace.plugins[existingIndex] = entry;
+			writeJsonFile(marketplacePath, marketplace);
+			logSuccess("Codex: updated marketplace entry");
+			installed++;
+		} else {
+			logInfo("Codex: marketplace entry exists (skipped)");
+			skipped++;
+		}
+	} else {
+		marketplace.plugins.push(entry);
+		writeJsonFile(marketplacePath, marketplace);
+		logSuccess("Codex: added marketplace entry");
+		installed++;
+	}
+
+	return { installed, skipped };
+}
+
 export async function run(args: ParsedArgs): Promise<void> {
 	if (!isGitRepo()) {
 		logError("Not a git repository. Run git init first.");
@@ -299,6 +476,10 @@ export async function run(args: ParsedArgs): Promise<void> {
 	} else {
 		logInfo("Claude Code: enforcement hook exists (skipped)");
 	}
+
+	const codexResult = installCodexPlugin(root, !!force);
+	installed += codexResult.installed;
+	skipped += codexResult.skipped;
 
 	console.log("");
 	log(`Done: ${installed} installed, ${skipped} skipped`);
