@@ -1,13 +1,14 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import type {
+	ConflictStrategy,
+	WorkflowConfig as SchemaWorkflowConfig,
+} from "@ruah-dev/schema";
 
-export type ConflictStrategy = "fail" | "rebase" | "retry";
+export type { ConflictStrategy };
 
-export interface WorkflowConfig {
-	base: string;
-	parallel: boolean;
-	onConflict: ConflictStrategy;
-}
+/** Orch always materializes full config defaults when parsing workflows. */
+export type WorkflowConfig = Required<SchemaWorkflowConfig>;
 
 export interface WorkflowTask {
 	name: string;

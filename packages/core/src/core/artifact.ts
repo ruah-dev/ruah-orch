@@ -1,24 +1,10 @@
+import type { Artifact } from "@ruah-dev/schema";
 import type { ClaimSet } from "./claims.js";
 import { getCommitSha, getCurrentCommit } from "./git.js";
 import type { WorkspaceHandle, WorkspaceProvider } from "./workspace.js";
 
-export interface TaskArtifact {
-	schemaVersion: 1;
-	taskName: string;
-	workspaceId: string;
-	baseRef: string;
-	headRef?: string;
-	commitSha?: string;
-	changedFiles: string[];
-	patch: string;
-	createdAt: string;
-	claims?: ClaimSet | null;
-	validation: {
-		executorSuccess: boolean;
-		contractSuccess: boolean;
-		gatesSuccess?: boolean;
-	};
-}
+/** @deprecated Prefer `Artifact` from `@ruah-dev/schema`; alias kept for orch API stability. */
+export type TaskArtifact = Artifact;
 
 export interface ArtifactValidationInput {
 	executorSuccess: boolean;
@@ -72,6 +58,7 @@ export function captureTaskArtifact(
 export function artifactPresent(artifact?: TaskArtifact | null): boolean {
 	return (
 		!!artifact &&
-		(artifact.changedFiles.length > 0 || artifact.patch.length > 0)
+		((artifact.changedFiles?.length ?? 0) > 0 ||
+			(artifact.patch?.length ?? 0) > 0)
 	);
 }

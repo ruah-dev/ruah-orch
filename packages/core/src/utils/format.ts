@@ -1,10 +1,6 @@
-export type TaskStatus =
-	| "created"
-	| "in-progress"
-	| "done"
-	| "merged"
-	| "failed"
-	| "cancelled";
+import type { TaskStatus } from "@ruah-dev/schema";
+
+export type { TaskStatus };
 
 export interface TaskLike {
 	name: string;

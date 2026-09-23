@@ -68,9 +68,9 @@ describe("artifact and integration engine", () => {
 		});
 
 		assert.equal(artifact.taskName, "artifact-task");
-		assert.ok(artifact.changedFiles.includes("README.md"));
+		assert.ok(artifact.changedFiles?.includes("README.md"));
 		assert.ok(artifact.commitSha);
-		assert.ok(artifact.baseRef.length > 0);
+		assert.ok((artifact.baseRef?.length ?? 0) > 0);
 	});
 
 	it("detects conflicting artifacts and stale base movement", () => {

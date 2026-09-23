@@ -64,9 +64,9 @@ export function compareArtifacts(
 	const staleBase = left.baseRef !== right.baseRef;
 
 	if (!leftRef || !rightRef) {
-		const overlap = left.changedFiles.filter((file) =>
-			right.changedFiles.includes(file),
-		);
+		const leftFiles = left.changedFiles ?? [];
+		const rightFiles = new Set(right.changedFiles ?? []);
+		const overlap = leftFiles.filter((file) => rightFiles.has(file));
 		return {
 			clean: overlap.length === 0,
 			staleBase,

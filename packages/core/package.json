@@ -56,8 +56,17 @@
 	"engines": {
 		"node": ">=18.0.0"
 	},
+	"peerDependencies": {
+		"@ruah-dev/schema": "^0.1.0"
+	},
+	"peerDependenciesMeta": {
+		"@ruah-dev/schema": {
+			"optional": false
+		}
+	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.10",
+		"@ruah-dev/schema": "file:../../../ruah-schema",
 		"@types/node": "^25.5.2",
 		"typescript": "^6.0.2"
 	}

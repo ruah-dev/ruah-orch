@@ -11,6 +11,10 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
+import type {
+	LockMode,
+	WorkflowRef as SchemaWorkflowRef,
+} from "@ruah-dev/schema";
 import type { TaskStatus } from "../utils/format.js";
 import type { TaskArtifact } from "./artifact.js";
 import { type ClaimSet, claimSetFromFiles, claimSetToFiles } from "./claims.js";
@@ -18,15 +22,16 @@ import { listRepoFiles } from "./git.js";
 import { migrateStateShape } from "./state-migrations.js";
 import type { WorkspaceHandle } from "./workspace.js";
 
-export interface WorkflowRef {
-	name: string;
-	path: string;
-	stage: number;
-	depends: string[];
-}
+export type { LockMode };
 
-export type LockMode = "read" | "write";
+/** Orch persists full workflow refs when spawning tasks from a workflow. */
+export type WorkflowRef = Required<SchemaWorkflowRef>;
 
+/**
+ * Persisted orch task — schema `Task` plus orch runtime fields
+ * (`workspace`, `integration`, `repoRoot`) that have no canonical home yet.
+ * Nested claim/artifact/lockMode types come from `@ruah-dev/schema`.
+ */
 export interface Task {
 	name: string;
 	status: TaskStatus;

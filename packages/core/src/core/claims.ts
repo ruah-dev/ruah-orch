@@ -1,12 +1,8 @@
+import type { Claim } from "@ruah-dev/schema";
 import { matchesPattern, patternsOverlap } from "./state.js";
 
-export interface ClaimSet {
-	ownedPaths: string[];
-	sharedPaths: string[];
-	readOnlyPaths: string[];
-	ownedSymbols?: string[];
-	sharedInterfaces?: string[];
-}
+/** @deprecated Prefer `Claim` from `@ruah-dev/schema`; alias kept for orch API stability. */
+export type ClaimSet = Claim;
 
 export interface ClaimBuckets {
 	owned: string[];
